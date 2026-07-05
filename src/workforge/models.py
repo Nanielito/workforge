@@ -1,0 +1,34 @@
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+Priority = Literal["low", "medium", "high", "urgent"]
+
+
+class WorkTask(BaseModel):
+    title: str
+    done: bool = False
+
+
+class Requirement(BaseModel):
+    title: str
+    description: str = ""
+    source: str = "manual"
+    namespace: str = "default"
+    priority: Priority = "medium"
+    labels: list[str] = Field(default_factory=list)
+    tasks: list[WorkTask] = Field(default_factory=list)
+
+
+class CreatedItem(BaseModel):
+    provider: str
+    id: str
+    url: str | None = None
+    title: str
+
+
+class ProviderCheck(BaseModel):
+    provider: str
+    ok: bool
+    message: str
