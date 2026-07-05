@@ -1,0 +1,11 @@
+name: example
+default_provider: trello
+
+providers:
+  trello:
+    list_id: "replace-with-trello-list-id"
+
+defaults:
+  source: manual
+  namespace: personal/example
+  dry_run: true
