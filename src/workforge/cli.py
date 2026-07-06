@@ -4,7 +4,7 @@ from pathlib import Path
 
 import typer
 
-from workforge.config import load_workspace_config
+from workforge.config import load_workspace
 from workforge.core.parser import parse_markdown_requirements
 from workforge.providers.registry import build_provider
 
@@ -18,8 +18,8 @@ def preview(
     input_file: Path,
     workspace: Path = typer.Option(..., "--workspace", "-w"),
 ) -> None:
-    config = load_workspace_config(workspace)
-    requirements = parse_markdown_requirements(input_file.read_text(), config)
+    runtime = load_workspace(workspace)
+    requirements = parse_markdown_requirements(input_file.read_text(), runtime.config)
     typer.echo(json.dumps([item.model_dump() for item in requirements], indent=2))
 
 
@@ -43,7 +43,8 @@ def test_provider(
 
 
 async def _create(input_file: Path, workspace: Path, provider_name: str | None, dry_run: bool, execute: bool) -> None:
-    config = load_workspace_config(workspace)
+    runtime = load_workspace(workspace)
+    config = runtime.config
     requirements = parse_markdown_requirements(input_file.read_text(), config)
 
     if dry_run or (config.defaults.dry_run and not execute):
@@ -52,7 +53,7 @@ async def _create(input_file: Path, workspace: Path, provider_name: str | None, 
 
     selected_provider = provider_name or config.default_provider
     provider_config = config.providers.get(selected_provider, {})
-    provider = build_provider(selected_provider, provider_config)
+    provider = build_provider(selected_provider, provider_config, runtime.env)
 
     created = []
     for requirement in requirements:
@@ -62,9 +63,10 @@ async def _create(input_file: Path, workspace: Path, provider_name: str | None, 
 
 
 async def _test_provider(workspace: Path, provider_name: str | None) -> None:
-    config = load_workspace_config(workspace)
+    runtime = load_workspace(workspace)
+    config = runtime.config
     selected_provider = provider_name or config.default_provider
     provider_config = config.providers.get(selected_provider, {})
-    provider = build_provider(selected_provider, provider_config)
+    provider = build_provider(selected_provider, provider_config, runtime.env)
     result = await provider.check()
     typer.echo(result.model_dump_json(indent=2))

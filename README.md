@@ -53,6 +53,11 @@ workspaces/<name>/
 Workspace `.env` files are intentionally local-only. Commit `.env.example`, not
 `.env`.
 
+Environment variables are scoped to the selected workspace at runtime. WorkForge
+reads `workspaces/<name>/.env` into an in-memory runtime object and passes those
+values to the selected provider. It does not load workspace credentials into the
+global process environment, which keeps simultaneous workspace runs isolated.
+
 ## Input Format
 
 The initial parser accepts Markdown sections with optional tasks:
