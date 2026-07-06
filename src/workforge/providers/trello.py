@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 import httpx
@@ -9,11 +10,10 @@ from workforge.providers.base import PlanningProvider
 class TrelloProvider(PlanningProvider):
     name = "trello"
 
-    def __init__(self, config: dict[str, Any], env: dict[str, str]):
+    def __init__(self, config: dict[str, Any]):
         self.config = config
-        self.env = env
-        self.api_key = env.get("TRELLO_API_KEY", "")
-        self.api_token = env.get("TRELLO_API_TOKEN", "")
+        self.api_key = os.getenv("TRELLO_API_KEY", "")
+        self.api_token = os.getenv("TRELLO_API_TOKEN", "")
         self.list_id = config.get("list_id", "")
         self.base_url = "https://api.trello.com/1"
 
