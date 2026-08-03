@@ -98,6 +98,32 @@ class TrelloProvider(PlanningProvider):
             tasks=_task_statuses_from_checklists(updated_checklists),
         )
 
+    async def discover_cards(self, label_ref: str | None = None) -> list[CreatedItem]:
+        check = await self.check()
+        if not check.ok:
+            raise RuntimeError(check.message)
+
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+            board_id = await self._get_board_id_for_list(client, self.list_id)
+            label_id = await self._resolve_label_id(client, board_id, label_ref) if label_ref else None
+            cards = await self._get_board_cards(client, board_id)
+
+        discovered_cards = [
+            card
+            for card in cards
+            if not card.get("closed") and _card_matches_label(card, label_id)
+        ]
+
+        return [
+            CreatedItem(
+                provider=self.name,
+                id=card["id"],
+                url=card.get("shortUrl") or card.get("url"),
+                title=card["name"],
+            )
+            for card in discovered_cards
+        ]
+
     def _auth_params(self) -> dict[str, str]:
         return {"key": self.api_key, "token": self.api_token}
 
@@ -126,6 +152,16 @@ class TrelloProvider(PlanningProvider):
             for label_name in label_names
             if isinstance(label_id := self.labels.get(label_name), str) and label_id
         ]
+
+    def _configured_label_id(self, label_ref: str) -> str | None:
+        if not isinstance(self.labels, dict):
+            return None
+
+        value = self.labels.get(label_ref)
+        if isinstance(value, str) and value:
+            return value
+
+        return None
 
     async def _create_checklist(self, client: httpx.AsyncClient, card_id: str) -> dict[str, Any]:
         response = await client.post(
@@ -161,6 +197,49 @@ class TrelloProvider(PlanningProvider):
         response.raise_for_status()
         return response.json()
 
+    async def _get_board_id_for_list(self, client: httpx.AsyncClient, list_id: str) -> str:
+        response = await client.get(
+            f"/lists/{list_id}",
+            params={**self._auth_params(), "fields": "idBoard"},
+        )
+        response.raise_for_status()
+        return response.json()["idBoard"]
+
+    async def _get_board_cards(self, client: httpx.AsyncClient, board_id: str) -> list[dict[str, Any]]:
+        response = await client.get(
+            f"/boards/{board_id}/cards",
+            params={**self._auth_params(), "fields": "id,name,closed,shortUrl,url,idLabels,labels"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def _get_board_labels(self, client: httpx.AsyncClient, board_id: str) -> list[dict[str, Any]]:
+        response = await client.get(
+            f"/boards/{board_id}/labels",
+            params={**self._auth_params(), "fields": "id,name,color"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def _resolve_label_id(self, client: httpx.AsyncClient, board_id: str, label_ref: str) -> str:
+        configured_label_id = self._configured_label_id(label_ref)
+        if configured_label_id:
+            return configured_label_id
+
+        labels = await self._get_board_labels(client, board_id)
+        exact_matches = [
+            label
+            for label in labels
+            if label.get("id") == label_ref or label.get("name", "").casefold() == label_ref.casefold()
+        ]
+
+        if len(exact_matches) == 1:
+            return exact_matches[0]["id"]
+        if len(exact_matches) > 1:
+            raise ValueError(f"Multiple Trello labels matched: {label_ref}")
+
+        raise ValueError(f"Trello label not found: {label_ref}")
+
     async def _update_check_item_state(
         self,
         client: httpx.AsyncClient,
@@ -187,6 +266,16 @@ def _task_statuses_from_checklists(checklists: list[dict[str, Any]]) -> list[Tas
         for checklist in checklists
         for check_item in checklist.get("checkItems", [])
     ]
+
+
+def _card_matches_label(card: dict[str, Any], label_id: str | None) -> bool:
+    if label_id is None:
+        return True
+
+    if label_id in card.get("idLabels", []):
+        return True
+
+    return any(label.get("id") == label_id for label in card.get("labels", []))
 
 
 def _find_task(checklists: list[dict[str, Any]], task_ref: str) -> dict[str, Any]:

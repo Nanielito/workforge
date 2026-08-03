@@ -66,6 +66,25 @@ def create(
 
 
 @app.command()
+def discover(
+    input_file: Path | None = typer.Argument(
+        None,
+        help="Optional input file used to choose output/<input-name>/cards.json.",
+    ),
+    workspace: Path = typer.Option(..., "--workspace", "-w"),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    label: str | None = typer.Option(None, "--label", "-l", help="Provider label name or ID used to filter cards."),
+    output_name: str = typer.Option(
+        "discovered",
+        "--output-name",
+        help="Output directory name when INPUT_FILE is omitted.",
+    ),
+    save: bool = typer.Option(False, "--save", help="Save discovered cards as cards.json."),
+) -> None:
+    asyncio.run(_discover(input_file, workspace, provider, label, output_name, save))
+
+
+@app.command()
 def status(
     input_file: Path,
     workspace: Path = typer.Option(..., "--workspace", "-w"),
@@ -145,6 +164,25 @@ async def _test_provider(workspace: Path, provider_name: str | None) -> None:
     provider = build_provider(selected_provider, provider_config, runtime.env)
     result = await provider.check()
     typer.echo(result.model_dump_json(indent=2))
+
+
+async def _discover(
+    input_file: Path | None,
+    workspace: Path,
+    provider_name: str | None,
+    label: str | None,
+    output_name: str,
+    save: bool,
+) -> None:
+    runtime = load_workspace(workspace)
+    selected_provider = provider_name or runtime.config.default_provider
+    provider_config = runtime.config.providers.get(selected_provider, {})
+    provider = build_provider(selected_provider, provider_config, runtime.env)
+    discovered = [item.model_dump() for item in await provider.discover_cards(label)]
+    _echo_json(discovered)
+
+    if save:
+        _save_output(runtime.path, _output_ref_for(input_file, output_name), "cards.json", discovered)
 
 
 async def _status(input_file: Path, workspace: Path, provider_name: str | None, save: bool) -> None:
@@ -279,6 +317,10 @@ def _build_agent_context(statuses: list[CardStatus]) -> str:
 
 def _output_dir_for(workspace_path: Path, input_file: Path) -> Path:
     return workspace_path / "output" / input_file.stem
+
+
+def _output_ref_for(input_file: Path | None, output_name: str) -> Path:
+    return input_file or Path(output_name)
 
 
 def _init_workspace(

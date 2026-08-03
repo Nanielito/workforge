@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from workforge.cli import _output_dir_for, _save_output
+from workforge.cli import _output_dir_for, _output_ref_for, _save_output
 
 
 def test_output_dir_for_uses_input_stem_under_workspace_output() -> None:
@@ -10,6 +10,13 @@ def test_output_dir_for_uses_input_stem_under_workspace_output() -> None:
     )
 
     assert output_dir == Path("workspaces/linkealo/output/shopify-feedback-app-review")
+
+
+def test_output_ref_for_uses_input_file_or_output_name() -> None:
+    input_file = Path("inbox/shopify-feedback-app-review.md")
+
+    assert _output_ref_for(input_file, "discovered") == input_file
+    assert _output_ref_for(None, "discovered") == Path("discovered")
 
 
 def test_save_output_writes_json_file(tmp_path: Path) -> None:

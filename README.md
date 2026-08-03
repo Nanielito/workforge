@@ -78,6 +78,12 @@ Save created provider items:
 workforge create workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --provider trello --execute --save
 ```
 
+Discover existing provider cards by label and rebuild `cards.json`:
+
+```bash
+workforge discover workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --provider trello --label shopify --save
+```
+
 Check provider card status from saved `cards.json`:
 
 ```bash
@@ -195,6 +201,43 @@ and URLs when the provider returns them.
 `status.json` contains the live provider status for saved cards and checklists.
 `agent-context.md` turns that status into implementation-ready context with
 pending and completed tasks.
+
+## Discovering Existing Cards
+
+Project-local workspaces can stay ignored by Git. To rebuild local tracking
+files after cloning a project, discover cards from the planning provider:
+
+```bash
+workforge discover .workforge/inbox/shopify-feedback-app-review.md \
+  --workspace .workforge \
+  --provider trello \
+  --label shopify \
+  --save
+```
+
+This writes:
+
+```txt
+.workforge/output/shopify-feedback-app-review/cards.json
+```
+
+Then refresh status and agent context:
+
+```bash
+workforge status .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --save
+workforge agent-context .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --save
+```
+
+For Trello, `--label` accepts a configured logical label name, a Trello label
+ID, or a Trello label name. Logical labels are read from `workforge.yaml`:
+
+```yaml
+providers:
+  trello:
+    list_id: "trello-list-id"
+    labels:
+      shopify: "trello-label-id"
+```
 
 ## Trello Labels
 

@@ -1,5 +1,5 @@
 from workforge.models import Requirement
-from workforge.providers.trello import TrelloProvider, _build_description, _task_statuses_from_checklists
+from workforge.providers.trello import TrelloProvider, _build_description, _card_matches_label, _task_statuses_from_checklists
 
 
 def test_build_description_excludes_internal_metadata() -> None:
@@ -36,6 +36,28 @@ def test_label_ids_for_maps_requirement_labels_to_trello_label_ids() -> None:
     label_ids = provider._label_ids_for(["shopify-review", "missing", "compliance"])
 
     assert label_ids == ["label-shopify", "label-compliance"]
+
+
+def test_configured_label_id_resolves_logical_label_names() -> None:
+    provider = TrelloProvider(
+        config={
+            "list_id": "list-123",
+            "labels": {
+                "shopify": "label-shopify",
+            },
+        },
+        env={"TRELLO_API_KEY": "key", "TRELLO_API_TOKEN": "token"},
+    )
+
+    assert provider._configured_label_id("shopify") == "label-shopify"
+    assert provider._configured_label_id("missing") is None
+
+
+def test_card_matches_label_by_id_labels_or_embedded_labels() -> None:
+    assert _card_matches_label({"idLabels": ["label-shopify"]}, "label-shopify") is True
+    assert _card_matches_label({"labels": [{"id": "label-shopify"}]}, "label-shopify") is True
+    assert _card_matches_label({"idLabels": ["label-other"]}, "label-shopify") is False
+    assert _card_matches_label({"idLabels": []}, None) is True
 
 
 def test_task_statuses_from_checklists_preserves_check_item_ids() -> None:
