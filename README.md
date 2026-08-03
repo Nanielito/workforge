@@ -41,6 +41,19 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+Create a project-local workspace:
+
+```bash
+workforge init .workforge --name linkealo --provider trello --namespace linkealo/shopify
+```
+
+Then add the printed entries to the host project's `.gitignore`:
+
+```gitignore
+.workforge/.env
+.workforge/output/
+```
+
 Preview requirements from a workspace inbox file:
 
 ```bash
@@ -100,7 +113,7 @@ workforge providers test --workspace workspaces/example --provider trello
 ## Workspace Layout
 
 ```txt
-workspaces/<name>/
+<workspace>/
   workforge.yaml
   .env.example
   inbox/
@@ -114,6 +127,31 @@ Environment variables are scoped to the selected workspace at runtime. WorkForge
 reads `workspaces/<name>/.env` into an in-memory runtime object and passes those
 values to the selected provider. It does not load workspace credentials into the
 global process environment, which keeps simultaneous workspace runs isolated.
+
+## Workspace Modes
+
+WorkForge supports two workspace styles.
+
+Central workspaces live inside this repository:
+
+```txt
+workspaces/example/
+```
+
+Project-local workspaces live inside the repository that the agent will modify:
+
+```txt
+some-project/
+  .workforge/
+    workforge.yaml
+    .env.example
+    inbox/
+    output/
+```
+
+Project-local workspaces are recommended when generating agent context for an
+implementation task because `agent-context.md`, `status.json`, and `cards.json`
+stay close to the code being changed.
 
 ## Input Format
 
