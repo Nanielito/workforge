@@ -14,6 +14,25 @@ tasks.
 - Preview generated requirements before creating external items.
 - Add providers through a small adapter interface.
 
+## Versioning
+
+WorkForge uses semantic versioning.
+
+- Patch releases fix bugs without changing commands or output contracts.
+- Minor releases add backward-compatible commands, providers, or output files.
+- Major releases may change CLI behavior, provider contracts, or saved output
+  formats.
+
+The first stable Trello workflow release should be tagged as `v1.0.0` once the
+Trello create/status/agent-context/complete-task flow is merged and CI is green.
+
+## CI
+
+GitHub Actions runs on pull requests and pushes to `main`.
+
+- Tests run on Python 3.11, 3.12, and 3.13.
+- The package build is validated with `python -m build`.
+
 ## Quick Start
 
 ```bash
