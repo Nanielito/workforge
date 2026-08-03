@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from workforge.models import CreatedItem, ProviderCheck, Requirement
+from workforge.models import CardStatus, CreatedItem, ProviderCheck, Requirement
 
 
 class PlanningProvider(ABC):
@@ -12,4 +12,12 @@ class PlanningProvider(ABC):
 
     @abstractmethod
     async def create_requirement(self, requirement: Requirement) -> CreatedItem:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_card_status(self, item: CreatedItem) -> CardStatus:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def complete_task(self, item: CreatedItem, task_ref: str) -> CardStatus:
         raise NotImplementedError

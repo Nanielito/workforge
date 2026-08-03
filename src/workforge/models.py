@@ -28,6 +28,25 @@ class CreatedItem(BaseModel):
     title: str
 
 
+class TaskStatus(BaseModel):
+    id: str | None = None
+    title: str
+    done: bool = False
+
+
+class CardStatus(BaseModel):
+    provider: str
+    id: str
+    url: str | None = None
+    title: str
+    closed: bool = False
+    tasks: list[TaskStatus] = Field(default_factory=list)
+
+    @property
+    def completed_tasks(self) -> int:
+        return sum(1 for task in self.tasks if task.done)
+
+
 class ProviderCheck(BaseModel):
     provider: str
     ok: bool
