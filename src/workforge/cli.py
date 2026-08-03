@@ -1,5 +1,7 @@
 import asyncio
 import json
+import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +106,17 @@ def agent_context(
     asyncio.run(_agent_context(input_file, workspace, provider, save))
 
 
+@app.command("card-context")
+def card_context(
+    input_file: Path,
+    workspace: Path = typer.Option(..., "--workspace", "-w"),
+    card: str = typer.Option(..., "--card", "-c", help="Card title, card ID, or unique title substring."),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    save: bool = typer.Option(False, "--save", help="Save focused card context under workspace output/<input-name>/cards/."),
+) -> None:
+    asyncio.run(_card_context(input_file, workspace, card, provider, save))
+
+
 @app.command("complete-task")
 def complete_task(
     input_file: Path,
@@ -203,6 +216,23 @@ async def _agent_context(input_file: Path, workspace: Path, provider_name: str |
         _save_text_output(runtime.path, input_file, "agent-context.md", output)
 
 
+async def _card_context(
+    input_file: Path,
+    workspace: Path,
+    card_ref: str,
+    provider_name: str | None,
+    save: bool,
+) -> None:
+    runtime = load_workspace(workspace)
+    statuses = await _load_card_statuses(runtime, input_file, provider_name)
+    status = _find_card_status(statuses, card_ref)
+    output = _build_card_context(status)
+    typer.echo(output)
+    if save:
+        output_path = _card_context_path(runtime.path, input_file, status)
+        _save_text_path(output_path, output)
+
+
 async def _complete_task(
     input_file: Path,
     workspace: Path,
@@ -278,6 +308,31 @@ def _find_created_item(items: list[CreatedItem], card_ref: str) -> CreatedItem:
     raise ValueError(f"Card not found: {card_ref}")
 
 
+def _find_card_status(statuses: list[CardStatus], card_ref: str) -> CardStatus:
+    exact_matches = [
+        status
+        for status in statuses
+        if status.id == card_ref or status.title.casefold() == card_ref.casefold()
+    ]
+    if len(exact_matches) == 1:
+        return exact_matches[0]
+    if len(exact_matches) > 1:
+        raise ValueError(f"Multiple cards matched exactly: {card_ref}")
+
+    partial_matches = [
+        status
+        for status in statuses
+        if card_ref.casefold() in status.title.casefold()
+    ]
+    if len(partial_matches) == 1:
+        return partial_matches[0]
+    if len(partial_matches) > 1:
+        titles = ", ".join(status.title for status in partial_matches)
+        raise ValueError(f"Multiple cards matched '{card_ref}': {titles}")
+
+    raise ValueError(f"Card not found: {card_ref}")
+
+
 def _build_agent_context(statuses: list[CardStatus]) -> str:
     lines = ["# WorkForge Agent Context", ""]
 
@@ -315,8 +370,75 @@ def _build_agent_context(statuses: list[CardStatus]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _build_card_context(status: CardStatus) -> str:
+    total_tasks = len(status.tasks)
+    pending_tasks = [task for task in status.tasks if not task.done]
+    completed_tasks = [task for task in status.tasks if task.done]
+    lines = [
+        f"# {status.title}",
+        "",
+        f"Provider: {status.provider}",
+        f"Card ID: {status.id}",
+        f"URL: {status.url or ''}",
+        f"Card closed: {status.closed}",
+        f"Progress: {len(completed_tasks)}/{total_tasks} tasks complete",
+        "",
+        "## Implementation Focus",
+        "",
+        "Work only on this card unless the implementation requires a small supporting change.",
+        "Prefer completing one pending task at a time, then run the relevant checks before marking it done.",
+        "",
+        "## Pending Tasks",
+        "",
+    ]
+
+    if pending_tasks:
+        lines.extend(_format_task_line(task) for task in pending_tasks)
+    else:
+        lines.append("- None")
+
+    lines.extend(["", "## Completed Tasks", ""])
+    if completed_tasks:
+        lines.extend(_format_task_line(task) for task in completed_tasks)
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
+            "## Completion Command",
+            "",
+            "After implementing and verifying a task, mark it complete with:",
+            "",
+            "```bash",
+            "workforge complete-task <input-file> --workspace <workspace> "
+            f"--card \"{status.id}\" --task \"<task-id-or-title>\"",
+            "```",
+        ]
+    )
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _format_task_line(task: Any) -> str:
+    suffix = f" (`{task.id}`)" if task.id else ""
+    return f"- {task.title}{suffix}"
+
+
 def _output_dir_for(workspace_path: Path, input_file: Path) -> Path:
     return workspace_path / "output" / input_file.stem
+
+
+def _card_context_path(workspace_path: Path, input_file: Path, status: CardStatus) -> Path:
+    return _output_dir_for(workspace_path, input_file) / "cards" / f"{_slugify(status.title)}.md"
+
+
+def _slugify(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value.casefold())
+    normalized = "".join(character for character in normalized if not unicodedata.combining(character))
+    normalized = re.sub(r"[^a-z0-9]+", "-", normalized)
+    normalized = normalized.strip("-")
+    return normalized or "card"
 
 
 def _output_ref_for(input_file: Path | None, output_name: str) -> Path:
@@ -403,6 +525,13 @@ def _save_text_output(workspace_path: Path, input_file: Path, filename: str, pay
     output_dir = _output_dir_for(workspace_path, input_file)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / filename
+    output_path.write_text(payload)
+    typer.echo(f"Saved {output_path}")
+    return output_path
+
+
+def _save_text_path(output_path: Path, payload: str) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(payload)
     typer.echo(f"Saved {output_path}")
     return output_path
