@@ -21,3 +21,7 @@ class PlanningProvider(ABC):
     @abstractmethod
     async def complete_task(self, item: CreatedItem, task_ref: str) -> CardStatus:
         raise NotImplementedError
+
+    @abstractmethod
+    async def discover_cards(self, label_ref: str | None = None) -> list[CreatedItem]:
+        raise NotImplementedError
