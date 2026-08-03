@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import typer
+import yaml
 
 from workforge.config import WorkspaceRuntime, load_workspace
 from workforge.core.parser import parse_markdown_requirements
@@ -13,6 +14,29 @@ from workforge.providers.registry import build_provider
 app = typer.Typer(no_args_is_help=True)
 providers_app = typer.Typer(no_args_is_help=True)
 app.add_typer(providers_app, name="providers")
+
+
+@app.command()
+def init(
+    workspace: Path = typer.Argument(Path(".workforge"), help="Workspace directory to create."),
+    name: str | None = typer.Option(None, "--name", "-n", help="Workspace name. Defaults to the directory name."),
+    provider: str = typer.Option("trello", "--provider", "-p", help="Default planning provider."),
+    namespace: str | None = typer.Option(None, "--namespace", help="Default requirement namespace."),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing WorkForge scaffold files."),
+    print_gitignore: bool = typer.Option(
+        True,
+        "--print-gitignore/--no-print-gitignore",
+        help="Print recommended .gitignore entries for project-local workspaces.",
+    ),
+) -> None:
+    created = _init_workspace(workspace, name, provider, namespace, force)
+    for path in created:
+        typer.echo(f"Created {path}")
+
+    if print_gitignore:
+        typer.echo("")
+        typer.echo("Recommended .gitignore entries:")
+        typer.echo(_project_workspace_gitignore_block(workspace))
 
 
 @app.command()
@@ -255,6 +279,73 @@ def _build_agent_context(statuses: list[CardStatus]) -> str:
 
 def _output_dir_for(workspace_path: Path, input_file: Path) -> Path:
     return workspace_path / "output" / input_file.stem
+
+
+def _init_workspace(
+    workspace_path: Path,
+    name: str | None,
+    provider: str,
+    namespace: str | None,
+    force: bool,
+) -> list[Path]:
+    workspace_name = name or workspace_path.name.removeprefix(".") or "workspace"
+    default_namespace = namespace or workspace_name
+    created: list[Path] = []
+
+    for directory in [workspace_path, workspace_path / "inbox", workspace_path / "output"]:
+        directory.mkdir(parents=True, exist_ok=True)
+
+    files = {
+        workspace_path / "workforge.yaml": _workspace_config_template(workspace_name, provider, default_namespace),
+        workspace_path / ".env.example": _env_example_template(provider),
+        workspace_path / "output" / ".gitkeep": "",
+    }
+
+    for path, content in files.items():
+        if path.exists() and not force:
+            continue
+
+        path.write_text(content)
+        created.append(path)
+
+    return created
+
+
+def _workspace_config_template(name: str, provider: str, namespace: str) -> str:
+    provider_config: dict[str, Any]
+    if provider == "trello":
+        provider_config = {
+            "list_id": "replace-with-trello-list-id",
+            "labels": {},
+        }
+    else:
+        provider_config = {}
+
+    payload = {
+        "name": name,
+        "default_provider": provider,
+        "providers": {
+            provider: provider_config,
+        },
+        "defaults": {
+            "source": "manual",
+            "namespace": namespace,
+            "dry_run": True,
+        },
+    }
+    return yaml.safe_dump(payload, sort_keys=False)
+
+
+def _env_example_template(provider: str) -> str:
+    if provider == "trello":
+        return "TRELLO_API_KEY=\nTRELLO_API_TOKEN=\n"
+
+    return ""
+
+
+def _project_workspace_gitignore_block(workspace_path: Path) -> str:
+    workspace_ref = workspace_path.name if workspace_path.is_absolute() else workspace_path.as_posix().rstrip("/")
+    return f"{workspace_ref}/.env\n{workspace_ref}/output/\n"
 
 
 def _save_output(workspace_path: Path, input_file: Path, filename: str, payload: Any) -> Path:
