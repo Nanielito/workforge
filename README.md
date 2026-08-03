@@ -96,6 +96,15 @@ Generate implementation context for an agent:
 workforge agent-context workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --save
 ```
 
+Generate implementation context for one card:
+
+```bash
+workforge card-context workspaces/example/inbox/sample-requirements.md \
+  --workspace workspaces/example \
+  --card "Fix UI" \
+  --save
+```
+
 Mark a provider checklist task as complete:
 
 ```bash
@@ -193,6 +202,8 @@ workspaces/<name>/
       cards.json
       status.json
       agent-context.md
+      cards/
+        fix-ui-operativa-post-instalacion.md
 ```
 
 `preview.json` contains the provider-neutral requirements parsed from the input.
@@ -201,6 +212,7 @@ and URLs when the provider returns them.
 `status.json` contains the live provider status for saved cards and checklists.
 `agent-context.md` turns that status into implementation-ready context with
 pending and completed tasks.
+`cards/*.md` contains focused implementation context for a single card.
 
 ## Discovering Existing Cards
 
@@ -226,6 +238,7 @@ Then refresh status and agent context:
 ```bash
 workforge status .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --save
 workforge agent-context .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --save
+workforge card-context .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --card "Fix UI" --save
 ```
 
 For Trello, `--label` accepts a configured logical label name, a Trello label
