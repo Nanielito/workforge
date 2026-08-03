@@ -4,10 +4,23 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.env
-workspaces/*/.env
-workspaces/*/output/*
-!workspaces/*/output/.gitkeep
 dist/
 build/
 *.egg-info/
+
+# Local secrets and shell helpers
+.env
+.env.*
+!.env.example
+*.local
+set_env*.fish
+
+# Personal workspaces are local by default. Keep the repository example only.
+workspaces/*
+!workspaces/example/
+!workspaces/example/**
+
+# Workspace generated artifacts
+workspaces/*/output/**
+!workspaces/*/output/
+!workspaces/*/output/.gitkeep
