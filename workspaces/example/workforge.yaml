@@ -4,6 +4,12 @@ default_provider: trello
 providers:
   trello:
     list_id: "replace-with-trello-list-id"
+    lists:
+      example_list_A: "replace-with-trello-list-id"
+      example_list_B: "replace-with-trello-list-id"
+    labels:
+      example_label_A: "replace-with-trello-label-id"
+      example_label_B: "replace-with-trello-label-id"
 
 defaults:
   source: manual
