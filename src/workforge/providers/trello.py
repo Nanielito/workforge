@@ -16,6 +16,7 @@ class TrelloProvider(PlanningProvider):
         self.api_token = env.get("TRELLO_API_TOKEN", "")
         self.list_id = config.get("list_id", "")
         self.labels = config.get("labels", {})
+        self.lists = config.get("lists", {})
         self.base_url = "https://api.trello.com/1"
 
     async def check(self) -> ProviderCheck:
@@ -98,6 +99,28 @@ class TrelloProvider(PlanningProvider):
             tasks=_task_statuses_from_checklists(updated_checklists),
         )
 
+    async def comment_card(self, item: CreatedItem, text: str) -> CardStatus:
+        check = await self.check()
+        if not check.ok:
+            raise RuntimeError(check.message)
+
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+            await self._comment_card(client, item.id, text)
+
+        return await self.get_card_status(item)
+
+    async def move_card(self, item: CreatedItem, list_ref: str) -> CardStatus:
+        check = await self.check()
+        if not check.ok:
+            raise RuntimeError(check.message)
+
+        list_id = self._configured_list_id(list_ref) or list_ref
+
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+            await self._move_card(client, item.id, list_id)
+
+        return await self.get_card_status(item)
+
     async def discover_cards(self, label_ref: str | None = None) -> list[CreatedItem]:
         check = await self.check()
         if not check.ok:
@@ -158,6 +181,16 @@ class TrelloProvider(PlanningProvider):
             return None
 
         value = self.labels.get(label_ref)
+        if isinstance(value, str) and value:
+            return value
+
+        return None
+
+    def _configured_list_id(self, list_ref: str) -> str | None:
+        if not isinstance(self.lists, dict):
+            return None
+
+        value = self.lists.get(list_ref)
         if isinstance(value, str) and value:
             return value
 
@@ -251,6 +284,24 @@ class TrelloProvider(PlanningProvider):
             f"/cards/{card_id}/checkItem/{check_item_id}",
             params=self._auth_params(),
             json={"state": state},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def _comment_card(self, client: httpx.AsyncClient, card_id: str, text: str) -> dict[str, Any]:
+        response = await client.post(
+            f"/cards/{card_id}/actions/comments",
+            params=self._auth_params(),
+            json={"text": text},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def _move_card(self, client: httpx.AsyncClient, card_id: str, list_id: str) -> dict[str, Any]:
+        response = await client.put(
+            f"/cards/{card_id}",
+            params=self._auth_params(),
+            json={"idList": list_id},
         )
         response.raise_for_status()
         return response.json()

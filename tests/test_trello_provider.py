@@ -53,6 +53,22 @@ def test_configured_label_id_resolves_logical_label_names() -> None:
     assert provider._configured_label_id("missing") is None
 
 
+def test_configured_list_id_resolves_logical_list_names() -> None:
+    provider = TrelloProvider(
+        config={
+            "list_id": "list-todo",
+            "lists": {
+                "todo": "list-todo",
+                "doing": "list-doing",
+            },
+        },
+        env={"TRELLO_API_KEY": "key", "TRELLO_API_TOKEN": "token"},
+    )
+
+    assert provider._configured_list_id("doing") == "list-doing"
+    assert provider._configured_list_id("missing") is None
+
+
 def test_card_matches_label_by_id_labels_or_embedded_labels() -> None:
     assert _card_matches_label({"idLabels": ["label-shopify"]}, "label-shopify") is True
     assert _card_matches_label({"labels": [{"id": "label-shopify"}]}, "label-shopify") is True

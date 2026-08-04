@@ -19,6 +19,11 @@ def test_workspace_config_template_defaults_to_trello() -> None:
         "providers": {
             "trello": {
                 "list_id": "replace-with-trello-list-id",
+                "lists": {
+                    "todo": "replace-with-trello-todo-list-id",
+                    "doing": "replace-with-trello-doing-list-id",
+                    "done": "replace-with-trello-done-list-id",
+                },
                 "labels": {},
             }
         },

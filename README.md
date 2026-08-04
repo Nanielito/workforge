@@ -119,6 +119,28 @@ accepts a checklist item ID, exact title, or unique title substring. By default,
 WorkForge refreshes `status.json` and `agent-context.md` after completing the
 task.
 
+Add an implementation comment to a provider card:
+
+```bash
+workforge comment-card workspaces/example/inbox/sample-requirements.md \
+  --workspace workspaces/example \
+  --card "Fix UI" \
+  --text "Started implementation from WorkForge agent context."
+```
+
+Move a provider card to another list or workflow column:
+
+```bash
+workforge move-card workspaces/example/inbox/sample-requirements.md \
+  --workspace workspaces/example \
+  --card "Fix UI" \
+  --list doing
+```
+
+For Trello, `--list` accepts a Trello list ID or a configured logical list name.
+By default, WorkForge refreshes `status.json` and `agent-context.md` after
+commenting or moving a card.
+
 Check provider credentials and workspace configuration:
 
 ```bash
@@ -248,6 +270,10 @@ ID, or a Trello label name. Logical labels are read from `workforge.yaml`:
 providers:
   trello:
     list_id: "trello-list-id"
+    lists:
+      todo: "trello-todo-list-id"
+      doing: "trello-doing-list-id"
+      done: "trello-done-list-id"
     labels:
       shopify: "trello-label-id"
 ```
