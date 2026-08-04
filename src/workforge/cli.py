@@ -116,6 +116,30 @@ def complete_task(
     asyncio.run(_complete_task(input_file, workspace, card, task, provider, save))
 
 
+@app.command("comment-card")
+def comment_card(
+    input_file: Path,
+    workspace: Path = typer.Option(..., "--workspace", "-w"),
+    card: str = typer.Option(..., "--card", "-c", help="Card title, card ID, or unique title substring."),
+    text: str = typer.Option(..., "--text", "-t", help="Comment text to add to the card."),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Refresh status.json and agent-context.md after commenting."),
+) -> None:
+    asyncio.run(_comment_card(input_file, workspace, card, text, provider, save))
+
+
+@app.command("move-card")
+def move_card(
+    input_file: Path,
+    workspace: Path = typer.Option(..., "--workspace", "-w"),
+    card: str = typer.Option(..., "--card", "-c", help="Card title, card ID, or unique title substring."),
+    list_ref: str = typer.Option(..., "--list", "-l", help="Destination list ID or configured list alias."),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Refresh status.json and agent-context.md after moving."),
+) -> None:
+    asyncio.run(_move_card(input_file, workspace, card, list_ref, provider, save))
+
+
 @providers_app.command("test")
 def test_provider(
     workspace: Path = typer.Option(..., "--workspace", "-w"),
@@ -226,6 +250,61 @@ async def _complete_task(
         status_output = [status.model_dump() for status in statuses]
         _save_output(runtime.path, input_file, "status.json", status_output)
         _save_text_output(runtime.path, input_file, "agent-context.md", _build_agent_context(statuses))
+
+
+async def _comment_card(
+    input_file: Path,
+    workspace: Path,
+    card_ref: str,
+    text: str,
+    provider_name: str | None,
+    save: bool,
+) -> None:
+    runtime = load_workspace(workspace)
+    selected_provider = provider_name or runtime.config.default_provider
+    provider_config = runtime.config.providers.get(selected_provider, {})
+    provider = build_provider(selected_provider, provider_config, runtime.env)
+    created_items = _load_created_items(runtime.path, input_file, selected_provider)
+    item = _find_created_item(created_items, card_ref)
+    updated_status = await provider.comment_card(item, text)
+
+    _echo_json(updated_status.model_dump())
+
+    if save:
+        await _refresh_saved_context(runtime, input_file, provider_name)
+
+
+async def _move_card(
+    input_file: Path,
+    workspace: Path,
+    card_ref: str,
+    list_ref: str,
+    provider_name: str | None,
+    save: bool,
+) -> None:
+    runtime = load_workspace(workspace)
+    selected_provider = provider_name or runtime.config.default_provider
+    provider_config = runtime.config.providers.get(selected_provider, {})
+    provider = build_provider(selected_provider, provider_config, runtime.env)
+    created_items = _load_created_items(runtime.path, input_file, selected_provider)
+    item = _find_created_item(created_items, card_ref)
+    updated_status = await provider.move_card(item, list_ref)
+
+    _echo_json(updated_status.model_dump())
+
+    if save:
+        await _refresh_saved_context(runtime, input_file, provider_name)
+
+
+async def _refresh_saved_context(
+    runtime: WorkspaceRuntime,
+    input_file: Path,
+    provider_name: str | None,
+) -> None:
+    statuses = await _load_card_statuses(runtime, input_file, provider_name)
+    status_output = [status.model_dump() for status in statuses]
+    _save_output(runtime.path, input_file, "status.json", status_output)
+    _save_text_output(runtime.path, input_file, "agent-context.md", _build_agent_context(statuses))
 
 
 async def _load_card_statuses(
@@ -358,6 +437,11 @@ def _workspace_config_template(name: str, provider: str, namespace: str) -> str:
     if provider == "trello":
         provider_config = {
             "list_id": "replace-with-trello-list-id",
+            "lists": {
+                "todo": "replace-with-trello-todo-list-id",
+                "doing": "replace-with-trello-doing-list-id",
+                "done": "replace-with-trello-done-list-id",
+            },
             "labels": {},
         }
     else:

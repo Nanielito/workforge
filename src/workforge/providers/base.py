@@ -23,5 +23,13 @@ class PlanningProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def comment_card(self, item: CreatedItem, text: str) -> CardStatus:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def move_card(self, item: CreatedItem, list_ref: str) -> CardStatus:
+        raise NotImplementedError
+
+    @abstractmethod
     async def discover_cards(self, label_ref: str | None = None) -> list[CreatedItem]:
         raise NotImplementedError
