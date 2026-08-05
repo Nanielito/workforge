@@ -26,6 +26,16 @@ WorkForge uses semantic versioning.
 The first stable Trello workflow release should be tagged as `v1.0.0` once the
 Trello create/status/agent-context/complete-task flow is merged and CI is green.
 
+Releases are created manually from the `Release` GitHub Actions workflow on
+`main`. The workflow updates the version and changelog, runs the test suite,
+builds and validates the wheel and source distribution, creates the Git tag,
+and attaches both distributions to a GitHub Release. To create the first stable
+release from `0.1.0`, run it with the `major` bump.
+
+GitHub Packages does not provide a Python package index. The GitHub Release is
+therefore the initial distribution channel; publishing to PyPI or a private
+Python index can be added later if installation through `pip` is required.
+
 ## CI
 
 GitHub Actions runs on pull requests and pushes to `main`.
