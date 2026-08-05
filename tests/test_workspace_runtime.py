@@ -5,29 +5,33 @@ from workforge.config import load_workspace
 
 
 def test_load_workspace_reads_env_without_global_side_effects(tmp_path: Path) -> None:
-    workspace = tmp_path / "example"
+    workspace = tmp_path / "sample-workspace"
     workspace.mkdir()
     (workspace / "workforge.yaml").write_text(
         """
-name: example
-default_provider: trello
+name: sample-workspace
+default_provider: test-provider
 providers:
-  trello:
-    list_id: list-123
+  test-provider:
+    resource_id: resource-123
 """
     )
-    (workspace / ".env").write_text("TRELLO_API_KEY=workspace-key\nTRELLO_API_TOKEN=workspace-token\n")
+    (workspace / ".env").write_text(
+        "WORKFORGE_TEST_TOKEN=workspace-token\nWORKFORGE_TEST_SECRET=workspace-secret\n"
+    )
 
-    previous_api_key = os.environ.get("TRELLO_API_KEY")
-    os.environ.pop("TRELLO_API_KEY", None)
+    variable_name = "WORKFORGE_TEST_TOKEN"
+    previous_value = os.environ.get(variable_name)
+    os.environ.pop(variable_name, None)
 
     try:
         runtime = load_workspace(workspace)
 
-        assert runtime.config.name == "example"
-        assert runtime.env["TRELLO_API_KEY"] == "workspace-key"
-        assert runtime.env["TRELLO_API_TOKEN"] == "workspace-token"
-        assert "TRELLO_API_KEY" not in os.environ
+        assert runtime.config.name == "sample-workspace"
+        assert runtime.config.default_provider == "test-provider"
+        assert runtime.env["WORKFORGE_TEST_TOKEN"] == "workspace-token"
+        assert runtime.env["WORKFORGE_TEST_SECRET"] == "workspace-secret"
+        assert variable_name not in os.environ
     finally:
-        if previous_api_key is not None:
-            os.environ["TRELLO_API_KEY"] = previous_api_key
+        if previous_value is not None:
+            os.environ[variable_name] = previous_value

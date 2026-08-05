@@ -10,11 +10,11 @@ from workforge.cli import (
 )
 
 
-def test_workspace_config_template_defaults_to_trello() -> None:
-    config = yaml.safe_load(_workspace_config_template("linkealo", "trello", "linkealo/shopify"))
+def test_workspace_config_template_for_trello() -> None:
+    config = yaml.safe_load(_workspace_config_template("sample-project", "trello", "examples/sample"))
 
     assert config == {
-        "name": "linkealo",
+        "name": "sample-project",
         "default_provider": "trello",
         "providers": {
             "trello": {
@@ -29,7 +29,7 @@ def test_workspace_config_template_defaults_to_trello() -> None:
         },
         "defaults": {
             "source": "manual",
-            "namespace": "linkealo/shopify",
+            "namespace": "examples/sample",
             "dry_run": True,
         },
     }
@@ -40,9 +40,9 @@ def test_init_workspace_creates_project_local_scaffold(tmp_path: Path) -> None:
 
     created = _init_workspace(
         workspace_path=workspace,
-        name="linkealo",
-        provider="trello",
-        namespace="linkealo/shopify",
+        name="sample-project",
+        provider="test-provider",
+        namespace="examples/sample",
         force=False,
     )
 
@@ -53,7 +53,8 @@ def test_init_workspace_creates_project_local_scaffold(tmp_path: Path) -> None:
     ]
     assert (workspace / "inbox").is_dir()
     assert (workspace / "output").is_dir()
-    assert (workspace / ".env.example").read_text() == "TRELLO_API_KEY=\nTRELLO_API_TOKEN=\n"
+    assert (workspace / ".env.example").read_text() == ""
+    assert "default_provider: test-provider" in (workspace / "workforge.yaml").read_text()
 
 
 def test_init_workspace_does_not_overwrite_existing_files_without_force(tmp_path: Path) -> None:
@@ -64,8 +65,8 @@ def test_init_workspace_does_not_overwrite_existing_files_without_force(tmp_path
 
     _init_workspace(
         workspace_path=workspace,
-        name="linkealo",
-        provider="trello",
+        name="sample-project",
+        provider="test-provider",
         namespace=None,
         force=False,
     )
@@ -81,13 +82,13 @@ def test_init_workspace_overwrites_existing_files_with_force(tmp_path: Path) -> 
 
     _init_workspace(
         workspace_path=workspace,
-        name="linkealo",
-        provider="trello",
+        name="sample-project",
+        provider="test-provider",
         namespace=None,
         force=True,
     )
 
-    assert "default_provider: trello" in config_path.read_text()
+    assert "default_provider: test-provider" in config_path.read_text()
 
 
 def test_env_example_template_uses_provider_credentials() -> None:

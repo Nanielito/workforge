@@ -5,15 +5,15 @@ from workforge.cli import _output_dir_for, _output_ref_for, _save_output
 
 def test_output_dir_for_uses_input_stem_under_workspace_output() -> None:
     output_dir = _output_dir_for(
-        Path("workspaces/linkealo"),
-        Path("workspaces/linkealo/inbox/shopify-feedback-app-review.md"),
+        Path("workspaces/sample-project"),
+        Path("workspaces/sample-project/inbox/release-requirements.md"),
     )
 
-    assert output_dir == Path("workspaces/linkealo/output/shopify-feedback-app-review")
+    assert output_dir == Path("workspaces/sample-project/output/release-requirements")
 
 
 def test_output_ref_for_uses_input_file_or_output_name() -> None:
-    input_file = Path("inbox/shopify-feedback-app-review.md")
+    input_file = Path("inbox/release-requirements.md")
 
     assert _output_ref_for(input_file, "discovered") == input_file
     assert _output_ref_for(None, "discovered") == Path("discovered")
