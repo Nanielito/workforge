@@ -15,10 +15,10 @@ build/
 *.local
 set_env*.fish
 
-# Personal workspaces are local by default. Keep the repository example only.
+# Personal workspaces are local by default. Keep shared examples explicitly.
 workspaces/*
-!workspaces/example/
-!workspaces/example/**
+!workspaces/trello-example/
+!workspaces/trello-example/**
 
 # Workspace generated artifacts
 workspaces/*/output/**
