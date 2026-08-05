@@ -1,4 +1,4 @@
-name: example
+name: trello-example
 default_provider: trello
 
 providers:
@@ -13,5 +13,5 @@ providers:
 
 defaults:
   source: manual
-  namespace: personal/example
+  namespace: examples/trello
   dry_run: true

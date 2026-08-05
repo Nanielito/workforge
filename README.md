@@ -57,50 +57,50 @@ Then add the printed entries to the host project's `.gitignore`:
 Preview requirements from a workspace inbox file:
 
 ```bash
-workforge preview workspaces/example/inbox/sample-requirements.md --workspace workspaces/example
+workforge preview workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example
 ```
 
 Save preview output next to the workspace:
 
 ```bash
-workforge preview workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --save
+workforge preview workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --save
 ```
 
 Create provider items:
 
 ```bash
-workforge create workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --provider trello --execute
+workforge create workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --provider trello --execute
 ```
 
 Save created provider items:
 
 ```bash
-workforge create workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --provider trello --execute --save
+workforge create workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --provider trello --execute --save
 ```
 
 Discover existing provider cards by label and rebuild `cards.json`:
 
 ```bash
-workforge discover workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --provider trello --label shopify --save
+workforge discover workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --provider trello --label shopify --save
 ```
 
 Check provider card status from saved `cards.json`:
 
 ```bash
-workforge status workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --save
+workforge status workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --save
 ```
 
 Generate implementation context for an agent:
 
 ```bash
-workforge agent-context workspaces/example/inbox/sample-requirements.md --workspace workspaces/example --save
+workforge agent-context workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --save
 ```
 
 Generate implementation context for one card:
 
 ```bash
-workforge card-context workspaces/example/inbox/sample-requirements.md \
-  --workspace workspaces/example \
+workforge card-context workspaces/trello-example/inbox/sample-requirements.md \
+  --workspace workspaces/trello-example \
   --card "Fix UI" \
   --save
 ```
@@ -108,8 +108,8 @@ workforge card-context workspaces/example/inbox/sample-requirements.md \
 Mark a provider checklist task as complete:
 
 ```bash
-workforge complete-task workspaces/example/inbox/sample-requirements.md \
-  --workspace workspaces/example \
+workforge complete-task workspaces/trello-example/inbox/sample-requirements.md \
+  --workspace workspaces/trello-example \
   --card "Fix UI" \
   --task "Add explicit customer data disclosure"
 ```
@@ -144,7 +144,7 @@ commenting or moving a card.
 Check provider credentials and workspace configuration:
 
 ```bash
-workforge providers test --workspace workspaces/example --provider trello
+workforge providers test --workspace workspaces/trello-example --provider trello
 ```
 
 ## Workspace Layout
@@ -169,10 +169,10 @@ global process environment, which keeps simultaneous workspace runs isolated.
 
 WorkForge supports two workspace styles.
 
-Central workspaces live inside this repository:
+Shared example workspaces live inside this repository:
 
 ```txt
-workspaces/example/
+workspaces/trello-example/
 ```
 
 Project-local workspaces live inside the repository that the agent will modify:
