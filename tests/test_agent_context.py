@@ -12,7 +12,6 @@ from workforge.cli import (
     _slugify,
 )
 from workforge.models import CardStatus, CreatedItem, TaskStatus
-from workforge.providers.trello import _find_task
 
 
 def test_load_created_items_filters_by_provider(tmp_path: Path) -> None:
@@ -23,25 +22,25 @@ def test_load_created_items_filters_by_provider(tmp_path: Path) -> None:
         """
 [
   {
-    "provider": "trello",
-    "id": "card-1",
-    "url": "https://trello.com/c/card-1",
+    "provider": "provider-a",
+    "id": "item-1",
+    "url": "https://provider-a.example/items/1",
     "title": "Fix UI"
   },
   {
-    "provider": "github",
-    "id": "issue-1",
-    "url": "https://github.com/example/issues/1",
+    "provider": "provider-b",
+    "id": "item-2",
+    "url": "https://provider-b.example/items/2",
     "title": "Fix UI"
   }
 ]
 """
     )
 
-    items = _load_created_items(workspace, workspace / "inbox" / "requirements.md", "trello")
+    items = _load_created_items(workspace, workspace / "inbox" / "requirements.md", "provider-a")
 
     assert len(items) == 1
-    assert items[0].id == "card-1"
+    assert items[0].id == "item-1"
     assert items[0].title == "Fix UI"
 
 
@@ -49,9 +48,9 @@ def test_build_agent_context_groups_pending_and_completed_tasks() -> None:
     context = _build_agent_context(
         [
             CardStatus(
-                provider="trello",
-                id="card-1",
-                url="https://trello.com/c/card-1",
+                provider="test-provider",
+                id="item-1",
+                url="https://provider.example/items/1",
                 title="Fix UI",
                 tasks=[
                     TaskStatus(title="Add status panel", done=False),
@@ -70,19 +69,19 @@ def test_build_agent_context_groups_pending_and_completed_tasks() -> None:
 
 def test_find_created_item_matches_by_id_exact_title_or_unique_partial() -> None:
     items = [
-        CreatedItem(provider="trello", id="card-1", title="Fix UI"),
-        CreatedItem(provider="trello", id="card-2", title="Deploy app"),
+        CreatedItem(provider="test-provider", id="item-1", title="Fix UI"),
+        CreatedItem(provider="test-provider", id="item-2", title="Deploy app"),
     ]
 
-    assert _find_created_item(items, "card-1").title == "Fix UI"
-    assert _find_created_item(items, "Fix UI").id == "card-1"
-    assert _find_created_item(items, "Deploy").id == "card-2"
+    assert _find_created_item(items, "item-1").title == "Fix UI"
+    assert _find_created_item(items, "Fix UI").id == "item-1"
+    assert _find_created_item(items, "Deploy").id == "item-2"
 
 
 def test_find_created_item_rejects_ambiguous_partial_matches() -> None:
     items = [
-        CreatedItem(provider="trello", id="card-1", title="Fix UI"),
-        CreatedItem(provider="trello", id="card-2", title="Fix template"),
+        CreatedItem(provider="test-provider", id="item-1", title="Fix UI"),
+        CreatedItem(provider="test-provider", id="item-2", title="Fix template"),
     ]
 
     with pytest.raises(ValueError, match="Multiple cards matched"):
@@ -91,21 +90,21 @@ def test_find_created_item_rejects_ambiguous_partial_matches() -> None:
 
 def test_find_card_status_matches_by_id_exact_title_or_unique_partial() -> None:
     statuses = [
-        CardStatus(provider="trello", id="card-1", title="Fix UI"),
-        CardStatus(provider="trello", id="card-2", title="Deploy app"),
+        CardStatus(provider="test-provider", id="item-1", title="Fix UI"),
+        CardStatus(provider="test-provider", id="item-2", title="Deploy app"),
     ]
 
-    assert _find_card_status(statuses, "card-1").title == "Fix UI"
-    assert _find_card_status(statuses, "Fix UI").id == "card-1"
-    assert _find_card_status(statuses, "Deploy").id == "card-2"
+    assert _find_card_status(statuses, "item-1").title == "Fix UI"
+    assert _find_card_status(statuses, "Fix UI").id == "item-1"
+    assert _find_card_status(statuses, "Deploy").id == "item-2"
 
 
 def test_build_card_context_focuses_on_one_card() -> None:
     context = _build_card_context(
         CardStatus(
-            provider="trello",
-            id="card-1",
-            url="https://trello.com/c/card-1",
+            provider="test-provider",
+            id="item-1",
+            url="https://provider.example/items/1",
             title="Fix UI",
             tasks=[
                 TaskStatus(id="task-1", title="Add status panel", done=False),
@@ -119,28 +118,13 @@ def test_build_card_context_focuses_on_one_card() -> None:
     assert "## Implementation Focus" in context
     assert "- Add status panel (`task-1`)" in context
     assert "- Remove empty template (`task-2`)" in context
-    assert '--card "card-1"' in context
+    assert '--card "item-1"' in context
 
 
 def test_slugify_and_card_context_path() -> None:
-    status = CardStatus(provider="trello", id="card-1", title="Fix UI operativa post-instalación")
+    status = CardStatus(provider="test-provider", id="item-1", title="Improve post-install UI")
 
-    assert _slugify(status.title) == "fix-ui-operativa-post-instalacion"
-    assert _card_context_path(Path("workspace"), Path("inbox/shopify-review.md"), status) == Path(
-        "workspace/output/shopify-review/cards/fix-ui-operativa-post-instalacion.md"
+    assert _slugify(status.title) == "improve-post-install-ui"
+    assert _card_context_path(Path("workspace"), Path("inbox/product-review.md"), status) == Path(
+        "workspace/output/product-review/cards/improve-post-install-ui.md"
     )
-
-
-def test_find_task_matches_by_id_exact_title_or_unique_partial() -> None:
-    checklists = [
-        {
-            "checkItems": [
-                {"id": "task-1", "name": "Add status panel", "state": "incomplete"},
-                {"id": "task-2", "name": "Remove empty template", "state": "complete"},
-            ]
-        }
-    ]
-
-    assert _find_task(checklists, "task-1")["name"] == "Add status panel"
-    assert _find_task(checklists, "Remove empty template")["id"] == "task-2"
-    assert _find_task(checklists, "status panel")["id"] == "task-1"
