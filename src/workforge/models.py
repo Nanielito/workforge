@@ -17,6 +17,7 @@ class Requirement(BaseModel):
     source: str = "manual"
     namespace: str = "default"
     priority: Priority = "medium"
+    milestone: str | None = None
     labels: list[str] = Field(default_factory=list)
     tasks: list[WorkTask] = Field(default_factory=list)
 

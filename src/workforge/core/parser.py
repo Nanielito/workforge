@@ -9,6 +9,7 @@ META_PREFIXES = {
     "priority": "priority",
     "labels": "labels",
     "namespace": "namespace",
+    "milestone": "milestone",
 }
 
 
@@ -67,6 +68,7 @@ def _parse_section(title: str, lines: Iterable[str], config: WorkspaceConfig) ->
         source=metadata.get("source", config.defaults.source),
         namespace=metadata.get("namespace", config.defaults.namespace),
         priority=_normalize_priority(priority),
+        milestone=metadata.get("milestone"),
         labels=labels,
         tasks=tasks,
     )

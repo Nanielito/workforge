@@ -572,6 +572,7 @@ def _workspace_config_template(name: str, provider: str, namespace: str) -> str:
             "repository": "replace-with-repository",
             "project_number": 1,
             "labels": {},
+            "milestones": {},
             "status": {
                 "field": "Status",
                 "values": {

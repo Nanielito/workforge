@@ -49,6 +49,13 @@ def test_registry_builds_github_provider() -> None:
     assert isinstance(build_provider("github", {}, {}), GitHubProvider)
 
 
+def test_milestone_must_be_configured() -> None:
+    provider = GitHubProvider({}, {})
+
+    with pytest.raises(ValueError, match="GitHub milestone is not configured: missing"):
+        provider._milestone_number_for("missing")
+
+
 def test_create_requirement_creates_issue_with_tasks_and_mapped_labels() -> None:
     def respond(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
@@ -57,6 +64,7 @@ def test_create_requirement_creates_issue_with_tasks_and_mapped_labels() -> None
                 "title": "Add status view",
                 "body": "Show current progress.\n\n## Tasks\n\n- [ ] Build view\n- [x] Add tests",
                 "labels": ["enhancement"],
+                "milestone": 1,
             }
             return httpx.Response(
                 201,
@@ -82,6 +90,7 @@ def test_create_requirement_creates_issue_with_tasks_and_mapped_labels() -> None
             "repository": "workforge",
             "project_number": 1,
             "labels": {"feature": "enhancement"},
+            "milestones": {"v2": 1},
         },
         {"GITHUB_TOKEN": "token"},
         transport=httpx.MockTransport(respond),
@@ -89,6 +98,7 @@ def test_create_requirement_creates_issue_with_tasks_and_mapped_labels() -> None
     requirement = Requirement(
         title="Add status view",
         description="Show current progress.",
+        milestone="v2",
         labels=["feature", "unmapped"],
         tasks=[WorkTask(title="Build view"), WorkTask(title="Add tests", done=True)],
     )

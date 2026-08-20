@@ -209,6 +209,7 @@ The initial parser accepts Markdown sections with optional tasks:
 
 Source: shopify_review
 Priority: high
+Milestone: release-2
 Labels: compliance, required
 
 Shopify asked us to explain what customer data is collected and why.
@@ -302,6 +303,8 @@ providers:
     project_number: 1
     labels:
       feature: enhancement
+    milestones:
+      v2: 1
     status:
       field: Status
       values:
@@ -322,10 +325,10 @@ Verify access without modifying GitHub:
 workforge providers test --workspace .workforge --provider github
 ```
 
-GitHub labels and Status options must already exist. Logical labels and status
-aliases map to their GitHub names through `workforge.yaml`; unmapped requirement
-labels are ignored. Project workflows may independently close an Issue when its
-Status moves to `Done`.
+GitHub labels, milestones, and Status options must already exist. Logical labels,
+milestones, and status aliases map through `workforge.yaml`; unmapped requirement
+labels are ignored, while an unmapped milestone is rejected. Project workflows
+may independently close an Issue when its Status moves to `Done`.
 
 ## Trello Labels
 
