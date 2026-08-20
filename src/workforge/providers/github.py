@@ -103,6 +103,7 @@ class GitHubProvider(PlanningProvider):
         self.repository = config.get("repository", "")
         self.project_number = config.get("project_number")
         self.labels = config.get("labels", {})
+        self.milestones = config.get("milestones", {})
         self.status = config.get("status", {})
         self.transport = transport
 
@@ -163,14 +164,18 @@ class GitHubProvider(PlanningProvider):
 
         async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
             project_id = await self._get_project_id(client)
+            payload: dict[str, Any] = {
+                "title": requirement.title,
+                "body": _build_issue_body(requirement),
+                "labels": self._label_names_for(requirement.labels),
+            }
+            if requirement.milestone:
+                payload["milestone"] = self._milestone_number_for(requirement.milestone)
+
             response = await client.post(
                 f"https://api.github.com/repos/{self.owner}/{self.repository}/issues",
                 headers=self._rest_headers(),
-                json={
-                    "title": requirement.title,
-                    "body": _build_issue_body(requirement),
-                    "labels": self._label_names_for(requirement.labels),
-                },
+                json=payload,
             )
             response.raise_for_status()
             issue = response.json()
@@ -204,6 +209,12 @@ class GitHubProvider(PlanningProvider):
         if not isinstance(self.labels, dict):
             return []
         return [label for name in logical_names if isinstance(label := self.labels.get(name), str) and label]
+
+    def _milestone_number_for(self, logical_name: str) -> int:
+        number = self.milestones.get(logical_name) if isinstance(self.milestones, dict) else None
+        if isinstance(number, bool) or not isinstance(number, int) or number < 1:
+            raise ValueError(f"GitHub milestone is not configured: {logical_name}")
+        return number
 
     async def _get_project_id(self, client: httpx.AsyncClient) -> str:
         payload = await self._graphql(
