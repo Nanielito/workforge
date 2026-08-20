@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from workforge.models import CardStatus, CreatedItem, ProviderCheck, Requirement
+from workforge.models import CreatedItem, ItemStatus, ProviderCheck, Requirement
 
 
 class PlanningProvider(ABC):
@@ -15,21 +15,21 @@ class PlanningProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_card_status(self, item: CreatedItem) -> CardStatus:
+    async def get_item_status(self, item: CreatedItem) -> ItemStatus:
         raise NotImplementedError
 
     @abstractmethod
-    async def complete_task(self, item: CreatedItem, task_ref: str) -> CardStatus:
+    async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
         raise NotImplementedError
 
     @abstractmethod
-    async def comment_card(self, item: CreatedItem, text: str) -> CardStatus:
+    async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
         raise NotImplementedError
 
     @abstractmethod
-    async def move_card(self, item: CreatedItem, list_ref: str) -> CardStatus:
+    async def move_item(self, item: CreatedItem, list_ref: str) -> ItemStatus:
         raise NotImplementedError
 
     @abstractmethod
-    async def discover_cards(self, label_ref: str | None = None) -> list[CreatedItem]:
+    async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
         raise NotImplementedError

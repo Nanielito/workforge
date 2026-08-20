@@ -2,7 +2,7 @@ from typing import Any
 
 import httpx
 
-from workforge.models import CardStatus, CreatedItem, ProviderCheck, Requirement, TaskStatus
+from workforge.models import CreatedItem, ItemStatus, ProviderCheck, Requirement, TaskStatus
 from workforge.providers.base import PlanningProvider
 
 
@@ -58,7 +58,7 @@ class TrelloProvider(PlanningProvider):
             title=requirement.title,
         )
 
-    async def get_card_status(self, item: CreatedItem) -> CardStatus:
+    async def get_item_status(self, item: CreatedItem) -> ItemStatus:
         check = await self.check()
         if not check.ok:
             raise RuntimeError(check.message)
@@ -69,7 +69,7 @@ class TrelloProvider(PlanningProvider):
 
         tasks = _task_statuses_from_checklists(checklists)
 
-        return CardStatus(
+        return ItemStatus(
             provider=self.name,
             id=card["id"],
             url=card.get("shortUrl") or card.get("url") or item.url,
@@ -78,7 +78,7 @@ class TrelloProvider(PlanningProvider):
             tasks=tasks,
         )
 
-    async def complete_task(self, item: CreatedItem, task_ref: str) -> CardStatus:
+    async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
         check = await self.check()
         if not check.ok:
             raise RuntimeError(check.message)
@@ -90,7 +90,7 @@ class TrelloProvider(PlanningProvider):
             await self._update_check_item_state(client, item.id, task["id"], "complete")
             updated_checklists = await self._get_card_checklists(client, item.id)
 
-        return CardStatus(
+        return ItemStatus(
             provider=self.name,
             id=card["id"],
             url=card.get("shortUrl") or card.get("url") or item.url,
@@ -99,7 +99,7 @@ class TrelloProvider(PlanningProvider):
             tasks=_task_statuses_from_checklists(updated_checklists),
         )
 
-    async def comment_card(self, item: CreatedItem, text: str) -> CardStatus:
+    async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
         check = await self.check()
         if not check.ok:
             raise RuntimeError(check.message)
@@ -107,9 +107,9 @@ class TrelloProvider(PlanningProvider):
         async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
             await self._comment_card(client, item.id, text)
 
-        return await self.get_card_status(item)
+        return await self.get_item_status(item)
 
-    async def move_card(self, item: CreatedItem, list_ref: str) -> CardStatus:
+    async def move_item(self, item: CreatedItem, list_ref: str) -> ItemStatus:
         check = await self.check()
         if not check.ok:
             raise RuntimeError(check.message)
@@ -119,9 +119,9 @@ class TrelloProvider(PlanningProvider):
         async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
             await self._move_card(client, item.id, list_id)
 
-        return await self.get_card_status(item)
+        return await self.get_item_status(item)
 
-    async def discover_cards(self, label_ref: str | None = None) -> list[CreatedItem]:
+    async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
         check = await self.check()
         if not check.ok:
             raise RuntimeError(check.message)

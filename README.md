@@ -106,12 +106,12 @@ Generate implementation context for an agent:
 workforge agent-context workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --save
 ```
 
-Generate implementation context for one card:
+Generate implementation context for one item:
 
 ```bash
-workforge card-context workspaces/trello-example/inbox/sample-requirements.md \
+workforge item-context workspaces/trello-example/inbox/sample-requirements.md \
   --workspace workspaces/trello-example \
-  --card "Fix UI" \
+  --item "Fix UI" \
   --save
 ```
 
@@ -120,36 +120,36 @@ Mark a provider checklist task as complete:
 ```bash
 workforge complete-task workspaces/trello-example/inbox/sample-requirements.md \
   --workspace workspaces/trello-example \
-  --card "Fix UI" \
+  --item "Fix UI" \
   --task "Add explicit customer data disclosure"
 ```
 
-`--card` accepts a card ID, exact title, or unique title substring. `--task`
+`--item` accepts an item ID, exact title, or unique title substring. `--task`
 accepts a checklist item ID, exact title, or unique title substring. By default,
 WorkForge refreshes `status.json` and `agent-context.md` after completing the
 task.
 
-Add an implementation comment to a provider card:
+Add an implementation comment to a provider item:
 
 ```bash
-workforge comment-card workspaces/example/inbox/sample-requirements.md \
+workforge comment-item workspaces/trello-example/inbox/sample-requirements.md \
   --workspace workspaces/example \
-  --card "Fix UI" \
+  --item "Fix UI" \
   --text "Started implementation from WorkForge agent context."
 ```
 
-Move a provider card to another list or workflow column:
+Move a provider item to another list or workflow column:
 
 ```bash
-workforge move-card workspaces/example/inbox/sample-requirements.md \
+workforge move-item workspaces/trello-example/inbox/sample-requirements.md \
   --workspace workspaces/example \
-  --card "Fix UI" \
+  --item "Fix UI" \
   --list doing
 ```
 
 For Trello, `--list` accepts a Trello list ID or a configured logical list name.
 By default, WorkForge refreshes `status.json` and `agent-context.md` after
-commenting or moving a card.
+commenting or moving an item.
 
 Check provider credentials and workspace configuration:
 
@@ -234,22 +234,22 @@ workspaces/<name>/
       items.json
       status.json
       agent-context.md
-      cards/
+      items/
         fix-ui-operativa-post-instalacion.md
 ```
 
 `preview.json` contains the provider-neutral requirements parsed from the input.
 `items.json` contains the items created by the selected provider, including IDs
 and URLs when the provider returns them.
-`status.json` contains the live provider status for saved cards and checklists.
+`status.json` contains the live provider status for saved items and tasks.
 `agent-context.md` turns that status into implementation-ready context with
 pending and completed tasks.
-`cards/*.md` contains focused implementation context for a single card.
+`items/*.md` contains focused implementation context for a single provider item.
 
-## Discovering Existing Cards
+## Discovering Existing Items
 
 Project-local workspaces can stay ignored by Git. To rebuild local tracking
-files after cloning a project, discover cards from the planning provider:
+files after cloning a project, discover items from the planning provider:
 
 ```bash
 workforge discover .workforge/inbox/shopify-feedback-app-review.md \
@@ -270,7 +270,7 @@ Then refresh status and agent context:
 ```bash
 workforge status .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --save
 workforge agent-context .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --save
-workforge card-context .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --card "Fix UI" --save
+workforge item-context .workforge/inbox/shopify-feedback-app-review.md --workspace .workforge --item "Fix UI" --save
 ```
 
 For Trello, `--label` accepts a configured logical label name, a Trello label

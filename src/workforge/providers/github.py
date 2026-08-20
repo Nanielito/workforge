@@ -2,7 +2,7 @@ from typing import Any
 
 import httpx
 
-from workforge.models import CardStatus, CreatedItem, ProviderCheck, Requirement
+from workforge.models import CreatedItem, ItemStatus, ProviderCheck, Requirement
 from workforge.providers.base import PlanningProvider
 
 
@@ -179,19 +179,19 @@ class GitHubProvider(PlanningProvider):
             raise RuntimeError(errors[0].get("message", "GitHub GraphQL error."))
         return payload
 
-    async def get_card_status(self, item: CreatedItem) -> CardStatus:
+    async def get_item_status(self, item: CreatedItem) -> ItemStatus:
         raise NotImplementedError
 
-    async def complete_task(self, item: CreatedItem, task_ref: str) -> CardStatus:
+    async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
         raise NotImplementedError
 
-    async def comment_card(self, item: CreatedItem, text: str) -> CardStatus:
+    async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
         raise NotImplementedError
 
-    async def move_card(self, item: CreatedItem, list_ref: str) -> CardStatus:
+    async def move_item(self, item: CreatedItem, list_ref: str) -> ItemStatus:
         raise NotImplementedError
 
-    async def discover_cards(self, label_ref: str | None = None) -> list[CreatedItem]:
+    async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
         raise NotImplementedError
 
 

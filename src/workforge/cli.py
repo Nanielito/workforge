@@ -10,7 +10,7 @@ import yaml
 
 from workforge.config import WorkspaceRuntime, load_workspace
 from workforge.core.parser import parse_markdown_requirements
-from workforge.models import CardStatus, CreatedItem
+from workforge.models import CreatedItem, ItemStatus
 from workforge.providers.registry import build_provider
 
 app = typer.Typer(no_args_is_help=True)
@@ -75,7 +75,7 @@ def discover(
     ),
     workspace: Path = typer.Option(..., "--workspace", "-w"),
     provider: str | None = typer.Option(None, "--provider", "-p"),
-    label: str | None = typer.Option(None, "--label", "-l", help="Provider label name or ID used to filter cards."),
+    label: str | None = typer.Option(None, "--label", "-l", help="Provider label name or ID used to filter items."),
     output_name: str = typer.Option(
         "discovered",
         "--output-name",
@@ -106,51 +106,51 @@ def agent_context(
     asyncio.run(_agent_context(input_file, workspace, provider, save))
 
 
-@app.command("card-context")
-def card_context(
+@app.command("item-context")
+def item_context(
     input_file: Path,
     workspace: Path = typer.Option(..., "--workspace", "-w"),
-    card: str = typer.Option(..., "--card", "-c", help="Card title, card ID, or unique title substring."),
+    item: str = typer.Option(..., "--item", "-i", help="Item title, item ID, or unique title substring."),
     provider: str | None = typer.Option(None, "--provider", "-p"),
-    save: bool = typer.Option(False, "--save", help="Save focused card context under workspace output/<input-name>/cards/."),
+    save: bool = typer.Option(False, "--save", help="Save focused item context under workspace output/<input-name>/items/."),
 ) -> None:
-    asyncio.run(_card_context(input_file, workspace, card, provider, save))
+    asyncio.run(_item_context(input_file, workspace, item, provider, save))
 
 
 @app.command("complete-task")
 def complete_task(
     input_file: Path,
     workspace: Path = typer.Option(..., "--workspace", "-w"),
-    card: str = typer.Option(..., "--card", "-c", help="Card title, card ID, or unique title substring."),
+    item: str = typer.Option(..., "--item", "-i", help="Item title, item ID, or unique title substring."),
     task: str = typer.Option(..., "--task", "-t", help="Task title, task ID, or unique title substring."),
     provider: str | None = typer.Option(None, "--provider", "-p"),
     save: bool = typer.Option(True, "--save/--no-save", help="Refresh status.json and agent-context.md after completion."),
 ) -> None:
-    asyncio.run(_complete_task(input_file, workspace, card, task, provider, save))
+    asyncio.run(_complete_task(input_file, workspace, item, task, provider, save))
 
 
-@app.command("comment-card")
-def comment_card(
+@app.command("comment-item")
+def comment_item(
     input_file: Path,
     workspace: Path = typer.Option(..., "--workspace", "-w"),
-    card: str = typer.Option(..., "--card", "-c", help="Card title, card ID, or unique title substring."),
-    text: str = typer.Option(..., "--text", "-t", help="Comment text to add to the card."),
+    item: str = typer.Option(..., "--item", "-i", help="Item title, item ID, or unique title substring."),
+    text: str = typer.Option(..., "--text", "-t", help="Comment text to add to the item."),
     provider: str | None = typer.Option(None, "--provider", "-p"),
     save: bool = typer.Option(True, "--save/--no-save", help="Refresh status.json and agent-context.md after commenting."),
 ) -> None:
-    asyncio.run(_comment_card(input_file, workspace, card, text, provider, save))
+    asyncio.run(_comment_item(input_file, workspace, item, text, provider, save))
 
 
-@app.command("move-card")
-def move_card(
+@app.command("move-item")
+def move_item(
     input_file: Path,
     workspace: Path = typer.Option(..., "--workspace", "-w"),
-    card: str = typer.Option(..., "--card", "-c", help="Card title, card ID, or unique title substring."),
+    item: str = typer.Option(..., "--item", "-i", help="Item title, item ID, or unique title substring."),
     list_ref: str = typer.Option(..., "--list", "-l", help="Destination list ID or configured list alias."),
     provider: str | None = typer.Option(None, "--provider", "-p"),
     save: bool = typer.Option(True, "--save/--no-save", help="Refresh status.json and agent-context.md after moving."),
 ) -> None:
-    asyncio.run(_move_card(input_file, workspace, card, list_ref, provider, save))
+    asyncio.run(_move_item(input_file, workspace, item, list_ref, provider, save))
 
 
 @providers_app.command("test")
@@ -215,7 +215,7 @@ async def _discover(
     selected_provider = provider_name or runtime.config.default_provider
     provider_config = runtime.config.providers.get(selected_provider, {})
     provider = build_provider(selected_provider, provider_config, runtime.env)
-    discovered = [item.model_dump() for item in await provider.discover_cards(label)]
+    discovered = [item.model_dump() for item in await provider.discover_items(label)]
     _echo_json(discovered)
 
     if save:
@@ -224,7 +224,7 @@ async def _discover(
 
 async def _status(input_file: Path, workspace: Path, provider_name: str | None, save: bool) -> None:
     runtime = load_workspace(workspace)
-    statuses = await _load_card_statuses(runtime, input_file, provider_name)
+    statuses = await _load_item_statuses(runtime, input_file, provider_name)
     output = [status.model_dump() for status in statuses]
     _echo_json(output)
     if save:
@@ -233,34 +233,34 @@ async def _status(input_file: Path, workspace: Path, provider_name: str | None, 
 
 async def _agent_context(input_file: Path, workspace: Path, provider_name: str | None, save: bool) -> None:
     runtime = load_workspace(workspace)
-    statuses = await _load_card_statuses(runtime, input_file, provider_name)
+    statuses = await _load_item_statuses(runtime, input_file, provider_name)
     output = _build_agent_context(statuses)
     typer.echo(output)
     if save:
         _save_text_output(runtime.path, input_file, "agent-context.md", output)
 
 
-async def _card_context(
+async def _item_context(
     input_file: Path,
     workspace: Path,
-    card_ref: str,
+    item_ref: str,
     provider_name: str | None,
     save: bool,
 ) -> None:
     runtime = load_workspace(workspace)
-    statuses = await _load_card_statuses(runtime, input_file, provider_name)
-    status = _find_card_status(statuses, card_ref)
-    output = _build_card_context(status)
+    statuses = await _load_item_statuses(runtime, input_file, provider_name)
+    status = _find_item_status(statuses, item_ref)
+    output = _build_item_context(status)
     typer.echo(output)
     if save:
-        output_path = _card_context_path(runtime.path, input_file, status)
+        output_path = _item_context_path(runtime.path, input_file, status)
         _save_text_path(output_path, output)
 
 
 async def _complete_task(
     input_file: Path,
     workspace: Path,
-    card_ref: str,
+    item_ref: str,
     task_ref: str,
     provider_name: str | None,
     save: bool,
@@ -270,22 +270,22 @@ async def _complete_task(
     provider_config = runtime.config.providers.get(selected_provider, {})
     provider = build_provider(selected_provider, provider_config, runtime.env)
     created_items = _load_created_items(runtime.path, input_file, selected_provider)
-    item = _find_created_item(created_items, card_ref)
+    item = _find_created_item(created_items, item_ref)
     updated_status = await provider.complete_task(item, task_ref)
 
     _echo_json(updated_status.model_dump())
 
     if save:
-        statuses = await _load_card_statuses(runtime, input_file, provider_name)
+        statuses = await _load_item_statuses(runtime, input_file, provider_name)
         status_output = [status.model_dump() for status in statuses]
         _save_output(runtime.path, input_file, "status.json", status_output)
         _save_text_output(runtime.path, input_file, "agent-context.md", _build_agent_context(statuses))
 
 
-async def _comment_card(
+async def _comment_item(
     input_file: Path,
     workspace: Path,
-    card_ref: str,
+    item_ref: str,
     text: str,
     provider_name: str | None,
     save: bool,
@@ -295,8 +295,8 @@ async def _comment_card(
     provider_config = runtime.config.providers.get(selected_provider, {})
     provider = build_provider(selected_provider, provider_config, runtime.env)
     created_items = _load_created_items(runtime.path, input_file, selected_provider)
-    item = _find_created_item(created_items, card_ref)
-    updated_status = await provider.comment_card(item, text)
+    item = _find_created_item(created_items, item_ref)
+    updated_status = await provider.comment_item(item, text)
 
     _echo_json(updated_status.model_dump())
 
@@ -304,10 +304,10 @@ async def _comment_card(
         await _refresh_saved_context(runtime, input_file, provider_name)
 
 
-async def _move_card(
+async def _move_item(
     input_file: Path,
     workspace: Path,
-    card_ref: str,
+    item_ref: str,
     list_ref: str,
     provider_name: str | None,
     save: bool,
@@ -317,8 +317,8 @@ async def _move_card(
     provider_config = runtime.config.providers.get(selected_provider, {})
     provider = build_provider(selected_provider, provider_config, runtime.env)
     created_items = _load_created_items(runtime.path, input_file, selected_provider)
-    item = _find_created_item(created_items, card_ref)
-    updated_status = await provider.move_card(item, list_ref)
+    item = _find_created_item(created_items, item_ref)
+    updated_status = await provider.move_item(item, list_ref)
 
     _echo_json(updated_status.model_dump())
 
@@ -331,22 +331,22 @@ async def _refresh_saved_context(
     input_file: Path,
     provider_name: str | None,
 ) -> None:
-    statuses = await _load_card_statuses(runtime, input_file, provider_name)
+    statuses = await _load_item_statuses(runtime, input_file, provider_name)
     status_output = [status.model_dump() for status in statuses]
     _save_output(runtime.path, input_file, "status.json", status_output)
     _save_text_output(runtime.path, input_file, "agent-context.md", _build_agent_context(statuses))
 
 
-async def _load_card_statuses(
+async def _load_item_statuses(
     runtime: WorkspaceRuntime,
     input_file: Path,
     provider_name: str | None,
-) -> list[CardStatus]:
+) -> list[ItemStatus]:
     selected_provider = provider_name or runtime.config.default_provider
     provider_config = runtime.config.providers.get(selected_provider, {})
     provider = build_provider(selected_provider, provider_config, runtime.env)
     created_items = _load_created_items(runtime.path, input_file, selected_provider)
-    return [await provider.get_card_status(item) for item in created_items]
+    return [await provider.get_item_status(item) for item in created_items]
 
 
 def _load_created_items(workspace_path: Path, input_file: Path, provider_name: str) -> list[CreatedItem]:
@@ -362,57 +362,57 @@ def _load_created_items(workspace_path: Path, input_file: Path, provider_name: s
     ]
 
 
-def _find_created_item(items: list[CreatedItem], card_ref: str) -> CreatedItem:
+def _find_created_item(items: list[CreatedItem], item_ref: str) -> CreatedItem:
     exact_matches = [
         item
         for item in items
-        if item.id == card_ref or item.title.casefold() == card_ref.casefold()
+        if item.id == item_ref or item.title.casefold() == item_ref.casefold()
     ]
     if len(exact_matches) == 1:
         return exact_matches[0]
     if len(exact_matches) > 1:
-        raise ValueError(f"Multiple cards matched exactly: {card_ref}")
+        raise ValueError(f"Multiple items matched exactly: {item_ref}")
 
     partial_matches = [
         item
         for item in items
-        if card_ref.casefold() in item.title.casefold()
+        if item_ref.casefold() in item.title.casefold()
     ]
     if len(partial_matches) == 1:
         return partial_matches[0]
     if len(partial_matches) > 1:
         titles = ", ".join(item.title for item in partial_matches)
-        raise ValueError(f"Multiple cards matched '{card_ref}': {titles}")
+        raise ValueError(f"Multiple items matched '{item_ref}': {titles}")
 
-    raise ValueError(f"Card not found: {card_ref}")
+    raise ValueError(f"Item not found: {item_ref}")
 
 
-def _find_card_status(statuses: list[CardStatus], card_ref: str) -> CardStatus:
+def _find_item_status(statuses: list[ItemStatus], item_ref: str) -> ItemStatus:
     exact_matches = [
         status
         for status in statuses
-        if status.id == card_ref or status.title.casefold() == card_ref.casefold()
+        if status.id == item_ref or status.title.casefold() == item_ref.casefold()
     ]
     if len(exact_matches) == 1:
         return exact_matches[0]
     if len(exact_matches) > 1:
-        raise ValueError(f"Multiple cards matched exactly: {card_ref}")
+        raise ValueError(f"Multiple items matched exactly: {item_ref}")
 
     partial_matches = [
         status
         for status in statuses
-        if card_ref.casefold() in status.title.casefold()
+        if item_ref.casefold() in status.title.casefold()
     ]
     if len(partial_matches) == 1:
         return partial_matches[0]
     if len(partial_matches) > 1:
         titles = ", ".join(status.title for status in partial_matches)
-        raise ValueError(f"Multiple cards matched '{card_ref}': {titles}")
+        raise ValueError(f"Multiple items matched '{item_ref}': {titles}")
 
-    raise ValueError(f"Card not found: {card_ref}")
+    raise ValueError(f"Item not found: {item_ref}")
 
 
-def _build_agent_context(statuses: list[CardStatus]) -> str:
+def _build_agent_context(statuses: list[ItemStatus]) -> str:
     lines = ["# WorkForge Agent Context", ""]
 
     for status in statuses:
@@ -424,9 +424,9 @@ def _build_agent_context(statuses: list[CardStatus]) -> str:
                 f"## {status.title}",
                 "",
                 f"Provider: {status.provider}",
-                f"Card ID: {status.id}",
+                f"Item ID: {status.id}",
                 f"URL: {status.url or ''}",
-                f"Card closed: {status.closed}",
+                f"Item closed: {status.closed}",
                 f"Progress: {len(completed_tasks)}/{total_tasks} tasks complete",
                 "",
                 "### Pending Tasks",
@@ -449,7 +449,7 @@ def _build_agent_context(statuses: list[CardStatus]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _build_card_context(status: CardStatus) -> str:
+def _build_item_context(status: ItemStatus) -> str:
     total_tasks = len(status.tasks)
     pending_tasks = [task for task in status.tasks if not task.done]
     completed_tasks = [task for task in status.tasks if task.done]
@@ -457,14 +457,14 @@ def _build_card_context(status: CardStatus) -> str:
         f"# {status.title}",
         "",
         f"Provider: {status.provider}",
-        f"Card ID: {status.id}",
+        f"Item ID: {status.id}",
         f"URL: {status.url or ''}",
-        f"Card closed: {status.closed}",
+        f"Item closed: {status.closed}",
         f"Progress: {len(completed_tasks)}/{total_tasks} tasks complete",
         "",
         "## Implementation Focus",
         "",
-        "Work only on this card unless the implementation requires a small supporting change.",
+        "Work only on this item unless the implementation requires a small supporting change.",
         "Prefer completing one pending task at a time, then run the relevant checks before marking it done.",
         "",
         "## Pending Tasks",
@@ -491,7 +491,7 @@ def _build_card_context(status: CardStatus) -> str:
             "",
             "```bash",
             "workforge complete-task <input-file> --workspace <workspace> "
-            f"--card \"{status.id}\" --task \"<task-id-or-title>\"",
+            f"--item \"{status.id}\" --task \"<task-id-or-title>\"",
             "```",
         ]
     )
@@ -508,8 +508,8 @@ def _output_dir_for(workspace_path: Path, input_file: Path) -> Path:
     return workspace_path / "output" / input_file.stem
 
 
-def _card_context_path(workspace_path: Path, input_file: Path, status: CardStatus) -> Path:
-    return _output_dir_for(workspace_path, input_file) / "cards" / f"{_slugify(status.title)}.md"
+def _item_context_path(workspace_path: Path, input_file: Path, status: ItemStatus) -> Path:
+    return _output_dir_for(workspace_path, input_file) / "items" / f"{_slugify(status.title)}.md"
 
 
 def _slugify(value: str) -> str:
@@ -517,7 +517,7 @@ def _slugify(value: str) -> str:
     normalized = "".join(character for character in normalized if not unicodedata.combining(character))
     normalized = re.sub(r"[^a-z0-9]+", "-", normalized)
     normalized = normalized.strip("-")
-    return normalized or "card"
+    return normalized or "item"
 
 
 def _output_ref_for(input_file: Path | None, output_name: str) -> Path:

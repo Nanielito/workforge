@@ -4,14 +4,14 @@ import pytest
 
 from workforge.cli import (
     _build_agent_context,
-    _build_card_context,
-    _card_context_path,
-    _find_card_status,
+    _build_item_context,
+    _find_item_status,
     _find_created_item,
     _load_created_items,
+    _item_context_path,
     _slugify,
 )
-from workforge.models import CardStatus, CreatedItem, TaskStatus
+from workforge.models import CreatedItem, ItemStatus, TaskStatus
 
 
 def test_load_created_items_filters_by_provider(tmp_path: Path) -> None:
@@ -47,7 +47,7 @@ def test_load_created_items_filters_by_provider(tmp_path: Path) -> None:
 def test_build_agent_context_groups_pending_and_completed_tasks() -> None:
     context = _build_agent_context(
         [
-            CardStatus(
+            ItemStatus(
                 provider="test-provider",
                 id="item-1",
                 url="https://provider.example/items/1",
@@ -84,24 +84,24 @@ def test_find_created_item_rejects_ambiguous_partial_matches() -> None:
         CreatedItem(provider="test-provider", id="item-2", title="Fix template"),
     ]
 
-    with pytest.raises(ValueError, match="Multiple cards matched"):
+    with pytest.raises(ValueError, match="Multiple items matched"):
         _find_created_item(items, "Fix")
 
 
-def test_find_card_status_matches_by_id_exact_title_or_unique_partial() -> None:
+def test_find_item_status_matches_by_id_exact_title_or_unique_partial() -> None:
     statuses = [
-        CardStatus(provider="test-provider", id="item-1", title="Fix UI"),
-        CardStatus(provider="test-provider", id="item-2", title="Deploy app"),
+        ItemStatus(provider="test-provider", id="item-1", title="Fix UI"),
+        ItemStatus(provider="test-provider", id="item-2", title="Deploy app"),
     ]
 
-    assert _find_card_status(statuses, "item-1").title == "Fix UI"
-    assert _find_card_status(statuses, "Fix UI").id == "item-1"
-    assert _find_card_status(statuses, "Deploy").id == "item-2"
+    assert _find_item_status(statuses, "item-1").title == "Fix UI"
+    assert _find_item_status(statuses, "Fix UI").id == "item-1"
+    assert _find_item_status(statuses, "Deploy").id == "item-2"
 
 
-def test_build_card_context_focuses_on_one_card() -> None:
-    context = _build_card_context(
-        CardStatus(
+def test_build_item_context_focuses_on_one_item() -> None:
+    context = _build_item_context(
+        ItemStatus(
             provider="test-provider",
             id="item-1",
             url="https://provider.example/items/1",
@@ -118,13 +118,13 @@ def test_build_card_context_focuses_on_one_card() -> None:
     assert "## Implementation Focus" in context
     assert "- Add status panel (`task-1`)" in context
     assert "- Remove empty template (`task-2`)" in context
-    assert '--card "item-1"' in context
+    assert '--item "item-1"' in context
 
 
-def test_slugify_and_card_context_path() -> None:
-    status = CardStatus(provider="test-provider", id="item-1", title="Improve post-install UI")
+def test_slugify_and_item_context_path() -> None:
+    status = ItemStatus(provider="test-provider", id="item-1", title="Improve post-install UI")
 
     assert _slugify(status.title) == "improve-post-install-ui"
-    assert _card_context_path(Path("workspace"), Path("inbox/product-review.md"), status) == Path(
-        "workspace/output/product-review/cards/improve-post-install-ui.md"
+    assert _item_context_path(Path("workspace"), Path("inbox/product-review.md"), status) == Path(
+        "workspace/output/product-review/items/improve-post-install-ui.md"
     )
