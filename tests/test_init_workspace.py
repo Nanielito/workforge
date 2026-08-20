@@ -104,6 +104,7 @@ def test_workspace_config_template_for_github() -> None:
         "owner": "replace-with-github-owner",
         "repository": "replace-with-repository",
         "project_number": 1,
+        "labels": {},
     }
 
 

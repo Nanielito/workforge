@@ -30,19 +30,11 @@ class GitHubProvider(PlanningProvider):
         self.owner = config.get("owner", "")
         self.repository = config.get("repository", "")
         self.project_number = config.get("project_number")
+        self.labels = config.get("labels", {})
         self.transport = transport
 
     async def check(self) -> ProviderCheck:
-        missing = [
-            name
-            for name, value in {
-                "GITHUB_TOKEN": self.token,
-                "providers.github.owner": self.owner,
-                "providers.github.repository": self.repository,
-                "providers.github.project_number": self.project_number,
-            }.items()
-            if value in (None, "")
-        ]
+        missing = self._missing_configuration()
         if missing:
             return ProviderCheck(
                 provider=self.name,
@@ -93,7 +85,49 @@ class GitHubProvider(PlanningProvider):
         )
 
     async def create_requirement(self, requirement: Requirement) -> CreatedItem:
-        raise NotImplementedError
+        if missing := self._missing_configuration():
+            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+
+        async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            response = await client.post(
+                f"https://api.github.com/repos/{self.owner}/{self.repository}/issues",
+                headers={
+                    "Authorization": f"Bearer {self.token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                json={
+                    "title": requirement.title,
+                    "body": _build_issue_body(requirement),
+                    "labels": self._label_names_for(requirement.labels),
+                },
+            )
+            response.raise_for_status()
+            issue = response.json()
+
+        return CreatedItem(
+            provider=self.name,
+            id=str(issue["number"]),
+            url=issue.get("html_url"),
+            title=issue.get("title") or requirement.title,
+        )
+
+    def _missing_configuration(self) -> list[str]:
+        return [
+            name
+            for name, value in {
+                "GITHUB_TOKEN": self.token,
+                "providers.github.owner": self.owner,
+                "providers.github.repository": self.repository,
+                "providers.github.project_number": self.project_number,
+            }.items()
+            if value in (None, "")
+        ]
+
+    def _label_names_for(self, logical_names: list[str]) -> list[str]:
+        if not isinstance(self.labels, dict):
+            return []
+        return [label for name in logical_names if isinstance(label := self.labels.get(name), str) and label]
 
     async def get_card_status(self, item: CreatedItem) -> CardStatus:
         raise NotImplementedError
@@ -109,3 +143,11 @@ class GitHubProvider(PlanningProvider):
 
     async def discover_cards(self, label_ref: str | None = None) -> list[CreatedItem]:
         raise NotImplementedError
+
+
+def _build_issue_body(requirement: Requirement) -> str:
+    parts = [requirement.description] if requirement.description else []
+    if requirement.tasks:
+        tasks = "\n".join(f"- [{'x' if task.done else ' '}] {task.title}" for task in requirement.tasks)
+        parts.append(f"## Tasks\n\n{tasks}")
+    return "\n\n".join(parts)

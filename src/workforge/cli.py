@@ -571,6 +571,7 @@ def _workspace_config_template(name: str, provider: str, namespace: str) -> str:
             "owner": "replace-with-github-owner",
             "repository": "replace-with-repository",
             "project_number": 1,
+            "labels": {},
         }
     else:
         provider_config = {}
