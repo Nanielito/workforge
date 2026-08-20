@@ -30,11 +30,29 @@ Releases are created manually from the `Release` GitHub Actions workflow on
 `main`. The workflow updates the version and changelog, runs the test suite,
 builds and validates the wheel and source distribution, creates the Git tag,
 and attaches both distributions to a GitHub Release. To create the first stable
-release from `0.1.0`, run it with the `major` bump.
+release after `v1.0.0`, run it with the `major` bump to create `v2.0.0`.
 
 GitHub Packages does not provide a Python package index. The GitHub Release is
 therefore the initial distribution channel; publishing to PyPI or a private
 Python index can be added later if installation through `pip` is required.
+
+### Migrating from v1 to v2
+
+Version 2 uses provider-neutral item terminology. Existing generated output is
+not migrated automatically; rename `cards.json` to `items.json` and the
+`cards/` context directory to `items/`, or run `workforge discover --save` to
+rebuild them from the provider.
+
+The corresponding CLI names changed:
+
+| v1 | v2 |
+| --- | --- |
+| `card-context --card/-c` | `item-context --item/-i` |
+| `comment-card --card/-c` | `comment-item --item/-i` |
+| `move-card --card/-c --list/-l` | `move-item --item/-i --status/-s` |
+
+Scripts using the v1 names must be updated before upgrading; v2 does not keep
+deprecated aliases.
 
 ## CI
 
