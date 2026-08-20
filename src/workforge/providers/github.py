@@ -185,17 +185,20 @@ class GitHubProvider(PlanningProvider):
         async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
             issue = await self._get_issue(client, item.id)
 
-        return ItemStatus(
-            provider=self.name,
-            id=str(issue["number"]),
-            url=issue.get("html_url") or item.url,
-            title=issue.get("title") or item.title,
-            closed=issue.get("state") == "closed",
-            tasks=_task_statuses_from_issue_body(issue.get("body") or ""),
-        )
+        return self._item_status_from_issue(issue, item)
 
     async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
-        raise NotImplementedError
+        if missing := self._missing_configuration():
+            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+
+        async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            issue = await self._get_issue(client, item.id)
+            body = issue.get("body") or ""
+            updated_body = _complete_task_in_issue_body(body, task_ref)
+            if updated_body != body:
+                issue = await self._update_issue_body(client, item.id, updated_body)
+
+        return self._item_status_from_issue(issue, item)
 
     async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
         raise NotImplementedError
@@ -214,6 +217,30 @@ class GitHubProvider(PlanningProvider):
         response.raise_for_status()
         return response.json()
 
+    async def _update_issue_body(
+        self,
+        client: httpx.AsyncClient,
+        issue_number: str,
+        body: str,
+    ) -> dict[str, Any]:
+        response = await client.patch(
+            f"https://api.github.com/repos/{self.owner}/{self.repository}/issues/{issue_number}",
+            headers=self._rest_headers(),
+            json={"body": body},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def _item_status_from_issue(self, issue: dict[str, Any], item: CreatedItem) -> ItemStatus:
+        return ItemStatus(
+            provider=self.name,
+            id=str(issue["number"]),
+            url=issue.get("html_url") or item.url,
+            title=issue.get("title") or item.title,
+            closed=issue.get("state") == "closed",
+            tasks=_task_statuses_from_issue_body(issue.get("body") or ""),
+        )
+
     def _rest_headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self.token}",
@@ -231,9 +258,13 @@ def _build_issue_body(requirement: Requirement) -> str:
 
 
 def _task_statuses_from_issue_body(body: str) -> list[TaskStatus]:
-    tasks: list[TaskStatus] = []
+    return [TaskStatus(id=task_id, title=title, done=done) for task_id, title, done, _ in _task_entries(body)]
+
+
+def _task_entries(body: str) -> list[tuple[str, str, bool, int]]:
+    tasks: list[tuple[str, str, bool, int]] = []
     in_tasks = False
-    for line in body.splitlines():
+    for line_index, line in enumerate(body.splitlines()):
         if line.strip() == "## Tasks":
             in_tasks = True
             continue
@@ -241,10 +272,32 @@ def _task_statuses_from_issue_body(body: str) -> list[TaskStatus]:
             break
         if in_tasks and (match := _TASK_PATTERN.fullmatch(line)):
             tasks.append(
-                TaskStatus(
-                    id=f"task-{len(tasks) + 1}",
-                    title=match.group(2).strip(),
-                    done=match.group(1).casefold() == "x",
+                (
+                    f"task-{len(tasks) + 1}",
+                    match.group(2).strip(),
+                    match.group(1).casefold() == "x",
+                    line_index,
                 )
             )
     return tasks
+
+
+def _complete_task_in_issue_body(body: str, task_ref: str) -> str:
+    tasks = _task_entries(body)
+    exact_matches = [task for task in tasks if task[0] == task_ref or task[1].casefold() == task_ref.casefold()]
+    if len(exact_matches) > 1:
+        raise ValueError(f"Multiple tasks matched exactly: {task_ref}")
+
+    matches = exact_matches or [task for task in tasks if task_ref.casefold() in task[1].casefold()]
+    if len(matches) > 1:
+        raise ValueError(f"Multiple tasks matched '{task_ref}': {', '.join(task[1] for task in matches)}")
+    if not matches:
+        raise ValueError(f"Task not found: {task_ref}")
+
+    _, _, done, line_index = matches[0]
+    if done:
+        return body
+
+    lines = body.splitlines(keepends=True)
+    lines[line_index] = lines[line_index].replace("- [ ]", "- [x]", 1)
+    return "".join(lines)

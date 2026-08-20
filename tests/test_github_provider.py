@@ -162,3 +162,41 @@ def test_get_item_status_reads_issue_and_managed_tasks() -> None:
         ("task-1", "Build view", False),
         ("task-2", "Add tests", True),
     ]
+
+
+def test_complete_task_updates_only_the_selected_managed_checkbox() -> None:
+    original_body = "- [ ] Unrelated\n\n## Tasks\n\n- [ ] Build view\n- [ ] Add tests\n"
+    updated_body = "- [ ] Unrelated\n\n## Tasks\n\n- [x] Build view\n- [ ] Add tests\n"
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/repos/owner/workforge/issues/12"
+        if request.method == "PATCH":
+            assert json.loads(request.content) == {"body": updated_body}
+            body = updated_body
+        else:
+            body = original_body
+        return httpx.Response(
+            200,
+            json={
+                "number": 12,
+                "html_url": "https://github.com/owner/workforge/issues/12",
+                "title": "Add status view",
+                "state": "open",
+                "body": body,
+            },
+        )
+
+    provider = GitHubProvider(
+        {"owner": "owner", "repository": "workforge", "project_number": 1},
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(
+        provider.complete_task(
+            CreatedItem(provider="github", id="12", title="Add status view"),
+            "task-1",
+        )
+    )
+
+    assert [task.done for task in status.tasks] == [True, False]
