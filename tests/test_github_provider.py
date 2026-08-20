@@ -282,3 +282,54 @@ def test_move_item_updates_project_status_from_configured_alias() -> None:
     )
 
     assert status.id == "12"
+
+
+def test_discover_items_paginates_and_filters_repository_state_and_label() -> None:
+    def issue(number: int, repository: str = "owner/workforge", state: str = "OPEN") -> dict[str, object]:
+        return {
+            "content": {
+                "number": number,
+                "title": f"Issue {number}",
+                "url": f"https://github.com/{repository}/issues/{number}",
+                "state": state,
+                "repository": {"nameWithOwner": repository},
+                "labels": {"nodes": [{"id": "label-node", "name": "enhancement"}]},
+            }
+        }
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        variables = json.loads(request.content)["variables"]
+        if variables["cursor"] is None:
+            nodes = [issue(1), issue(2, repository="owner/other")]
+            page_info = {"hasNextPage": True, "endCursor": "next-page"}
+        else:
+            assert variables["cursor"] == "next-page"
+            nodes = [issue(3), issue(4, state="CLOSED")]
+            page_info = {"hasNextPage": False, "endCursor": None}
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "user": {
+                        "projectV2": {
+                            "items": {"nodes": nodes, "pageInfo": page_info}
+                        }
+                    }
+                }
+            },
+        )
+
+    provider = GitHubProvider(
+        {
+            "owner": "owner",
+            "repository": "workforge",
+            "project_number": 1,
+            "labels": {"feature": "enhancement"},
+        },
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    items = asyncio.run(provider.discover_items("feature"))
+
+    assert [item.id for item in items] == ["1", "3"]

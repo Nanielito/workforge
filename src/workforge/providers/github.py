@@ -62,6 +62,30 @@ mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
 }
 """
 
+_PROJECT_ITEMS_QUERY = """
+query($owner: String!, $project: Int!, $cursor: String) {
+  user(login: $owner) {
+    projectV2(number: $project) {
+      items(first: 100, after: $cursor) {
+        nodes {
+          content {
+            ... on Issue {
+              number
+              title
+              url
+              state
+              repository { nameWithOwner }
+              labels(first: 100) { nodes { id name } }
+            }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}
+"""
+
 _TASK_PATTERN = re.compile(r"^- \[([ xX])\] (.+)$")
 
 
@@ -259,7 +283,57 @@ class GitHubProvider(PlanningProvider):
         return await self.get_item_status(item)
 
     async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
-        raise NotImplementedError
+        if missing := self._missing_configuration():
+            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+
+        discovered: list[CreatedItem] = []
+        cursor: str | None = None
+        async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            while True:
+                payload = await self._graphql(
+                    client,
+                    _PROJECT_ITEMS_QUERY,
+                    {"owner": self.owner, "project": self.project_number, "cursor": cursor},
+                )
+                project = (payload.get("data", {}).get("user") or {}).get("projectV2") or {}
+                items = project.get("items")
+                if not items:
+                    raise ValueError(f"GitHub Project v2 not found: {self.project_number}")
+
+                for node in items.get("nodes", []):
+                    issue = (node or {}).get("content") or {}
+                    if self._is_discoverable_issue(issue, label_ref):
+                        discovered.append(
+                            CreatedItem(
+                                provider=self.name,
+                                id=str(issue["number"]),
+                                url=issue.get("url"),
+                                title=issue["title"],
+                            )
+                        )
+
+                page_info = items.get("pageInfo", {})
+                if not page_info.get("hasNextPage"):
+                    break
+                cursor = page_info.get("endCursor")
+
+        return discovered
+
+    def _is_discoverable_issue(self, issue: dict[str, Any], label_ref: str | None) -> bool:
+        if issue.get("state") != "OPEN":
+            return False
+        repository = issue.get("repository", {}).get("nameWithOwner", "")
+        if repository.casefold() != f"{self.owner}/{self.repository}".casefold():
+            return False
+        if not label_ref:
+            return True
+
+        configured_name = self.labels.get(label_ref) if isinstance(self.labels, dict) else None
+        expected = configured_name or label_ref
+        return any(
+            label.get("id") == expected or label.get("name", "").casefold() == expected.casefold()
+            for label in issue.get("labels", {}).get("nodes", [])
+        )
 
     async def _get_issue(self, client: httpx.AsyncClient, issue_number: str) -> dict[str, Any]:
         response = await client.get(
