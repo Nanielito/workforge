@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import httpx
+import pytest
 
 from workforge.models import Requirement, WorkTask
 from workforge.providers.github import GitHubProvider
@@ -50,20 +51,30 @@ def test_registry_builds_github_provider() -> None:
 
 def test_create_requirement_creates_issue_with_tasks_and_mapped_labels() -> None:
     def respond(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/repos/owner/workforge/issues"
-        assert json.loads(request.content) == {
-            "title": "Add status view",
-            "body": "Show current progress.\n\n## Tasks\n\n- [ ] Build view\n- [x] Add tests",
-            "labels": ["enhancement"],
-        }
-        return httpx.Response(
-            201,
-            json={
-                "number": 12,
-                "html_url": "https://github.com/owner/workforge/issues/12",
+        payload = json.loads(request.content)
+        if request.url.path == "/repos/owner/workforge/issues":
+            assert payload == {
                 "title": "Add status view",
-            },
-        )
+                "body": "Show current progress.\n\n## Tasks\n\n- [ ] Build view\n- [x] Add tests",
+                "labels": ["enhancement"],
+            }
+            return httpx.Response(
+                201,
+                json={
+                    "number": 12,
+                    "node_id": "issue-node",
+                    "html_url": "https://github.com/owner/workforge/issues/12",
+                    "title": "Add status view",
+                },
+            )
+
+        assert request.url.path == "/graphql"
+        if "addProjectV2ItemById" in payload["query"]:
+            assert payload["variables"] == {"project": "project-node", "content": "issue-node"}
+            return httpx.Response(200, json={"data": {"addProjectV2ItemById": {"item": {"id": "item-node"}}}})
+
+        assert payload["variables"] == {"owner": "owner", "project": 1}
+        return httpx.Response(200, json={"data": {"user": {"projectV2": {"id": "project-node"}}}})
 
     provider = GitHubProvider(
         {
@@ -86,3 +97,30 @@ def test_create_requirement_creates_issue_with_tasks_and_mapped_labels() -> None
 
     assert item.id == "12"
     assert item.url == "https://github.com/owner/workforge/issues/12"
+
+
+def test_create_requirement_reports_issue_when_project_insertion_fails() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        if request.url.path == "/repos/owner/workforge/issues":
+            return httpx.Response(
+                201,
+                json={
+                    "number": 12,
+                    "node_id": "issue-node",
+                    "html_url": "https://github.com/owner/workforge/issues/12",
+                    "title": "Add status view",
+                },
+            )
+        if "addProjectV2ItemById" in payload["query"]:
+            return httpx.Response(200, json={"errors": [{"message": "Project write denied"}]})
+        return httpx.Response(200, json={"data": {"user": {"projectV2": {"id": "project-node"}}}})
+
+    provider = GitHubProvider(
+        {"owner": "owner", "repository": "workforge", "project_number": 1},
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    with pytest.raises(RuntimeError, match=r"Issue created at https://github.com/owner/workforge/issues/12"):
+        asyncio.run(provider.create_requirement(Requirement(title="Add status view")))
