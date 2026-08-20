@@ -566,6 +566,12 @@ def _workspace_config_template(name: str, provider: str, namespace: str) -> str:
             },
             "labels": {},
         }
+    elif provider == "github":
+        provider_config = {
+            "owner": "replace-with-github-owner",
+            "repository": "replace-with-repository",
+            "project_number": 1,
+        }
     else:
         provider_config = {}
 
@@ -587,6 +593,8 @@ def _workspace_config_template(name: str, provider: str, namespace: str) -> str:
 def _env_example_template(provider: str) -> str:
     if provider == "trello":
         return "TRELLO_API_KEY=\nTRELLO_API_TOKEN=\n"
+    if provider == "github":
+        return "GITHUB_TOKEN=\n"
 
     return ""
 

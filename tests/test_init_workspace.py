@@ -93,7 +93,18 @@ def test_init_workspace_overwrites_existing_files_with_force(tmp_path: Path) -> 
 
 def test_env_example_template_uses_provider_credentials() -> None:
     assert _env_example_template("trello") == "TRELLO_API_KEY=\nTRELLO_API_TOKEN=\n"
+    assert _env_example_template("github") == "GITHUB_TOKEN=\n"
     assert _env_example_template("unknown") == ""
+
+
+def test_workspace_config_template_for_github() -> None:
+    config = yaml.safe_load(_workspace_config_template("sample-project", "github", "examples/sample"))
+
+    assert config["providers"]["github"] == {
+        "owner": "replace-with-github-owner",
+        "repository": "replace-with-repository",
+        "project_number": 1,
+    }
 
 
 def test_project_workspace_gitignore_block() -> None:
