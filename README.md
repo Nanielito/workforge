@@ -88,13 +88,13 @@ Save created provider items:
 workforge create workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --provider trello --execute --save
 ```
 
-Discover existing provider cards by label and rebuild `cards.json`:
+Discover existing provider items by label and rebuild `items.json`:
 
 ```bash
 workforge discover workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --provider trello --label shopify --save
 ```
 
-Check provider card status from saved `cards.json`:
+Check provider item status from saved `items.json`:
 
 ```bash
 workforge status workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --save
@@ -197,7 +197,7 @@ some-project/
 ```
 
 Project-local workspaces are recommended when generating agent context for an
-implementation task because `agent-context.md`, `status.json`, and `cards.json`
+implementation task because `agent-context.md`, `status.json`, and `items.json`
 stay close to the code being changed.
 
 ## Input Format
@@ -231,7 +231,7 @@ workspaces/<name>/
   output/
     shopify-feedback-app-review/
       preview.json
-      cards.json
+      items.json
       status.json
       agent-context.md
       cards/
@@ -239,7 +239,7 @@ workspaces/<name>/
 ```
 
 `preview.json` contains the provider-neutral requirements parsed from the input.
-`cards.json` contains the items created by the selected provider, including IDs
+`items.json` contains the items created by the selected provider, including IDs
 and URLs when the provider returns them.
 `status.json` contains the live provider status for saved cards and checklists.
 `agent-context.md` turns that status into implementation-ready context with
@@ -262,7 +262,7 @@ workforge discover .workforge/inbox/shopify-feedback-app-review.md \
 This writes:
 
 ```txt
-.workforge/output/shopify-feedback-app-review/cards.json
+.workforge/output/shopify-feedback-app-review/items.json
 ```
 
 Then refresh status and agent context:

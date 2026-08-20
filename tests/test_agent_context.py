@@ -18,7 +18,7 @@ def test_load_created_items_filters_by_provider(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     output_dir = workspace / "output" / "requirements"
     output_dir.mkdir(parents=True)
-    (output_dir / "cards.json").write_text(
+    (output_dir / "items.json").write_text(
         """
 [
   {
