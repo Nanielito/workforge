@@ -19,6 +19,9 @@ set_env*.fish
 workspaces/*
 !workspaces/trello-example/
 !workspaces/trello-example/**
+!workspaces/github-projects-example/
+!workspaces/github-projects-example/**
+workspaces/github-projects-example/.env
 
 # Workspace generated artifacts
 workspaces/*/output/**

@@ -1,0 +1,23 @@
+name: github-projects-example
+default_provider: github
+
+providers:
+  github:
+    owner: replace-with-github-owner
+    repository: replace-with-repository
+    project_number: 1
+    labels:
+      feature: enhancement
+      docs: documentation
+    milestones: {}
+    status:
+      field: Status
+      values:
+        todo: Todo
+        doing: In Progress
+        done: Done
+
+defaults:
+  source: manual
+  namespace: examples/github-projects
+  dry_run: true

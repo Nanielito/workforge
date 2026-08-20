@@ -183,6 +183,7 @@ Shared example workspaces live inside this repository:
 
 ```txt
 workspaces/trello-example/
+workspaces/github-projects-example/
 ```
 
 Project-local workspaces live inside the repository that the agent will modify:
