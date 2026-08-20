@@ -17,6 +17,56 @@ def test_check_rejects_missing_configuration() -> None:
     assert "providers.github.project_number" in result.message
 
 
+def test_invalid_project_number_is_rejected_before_request() -> None:
+    def fail_if_called(request: httpx.Request) -> httpx.Response:
+        raise AssertionError(f"Unexpected request: {request.url}")
+
+    provider = GitHubProvider(
+        {"owner": "owner", "repository": "workforge", "project_number": 0},
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(fail_if_called),
+    )
+
+    result = asyncio.run(provider.check())
+
+    assert result.ok is False
+    assert result.message == "providers.github.project_number must be a positive integer."
+    with pytest.raises(RuntimeError, match="positive integer"):
+        asyncio.run(provider.discover_items())
+
+
+def test_graphql_errors_redact_token() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"errors": [{"message": "Denied secret-token"}]})
+
+    provider = GitHubProvider(
+        {"owner": "owner", "repository": "workforge", "project_number": 1},
+        {"GITHUB_TOKEN": "secret-token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    result = asyncio.run(provider.check())
+
+    assert result.message == "Denied [REDACTED]"
+
+
+def test_rest_errors_do_not_expose_token() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"message": "Bad credentials"})
+
+    provider = GitHubProvider(
+        {"owner": "owner", "repository": "workforge", "project_number": 1},
+        {"GITHUB_TOKEN": "secret-token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    result = asyncio.run(provider.check())
+
+    assert result.ok is False
+    assert "secret-token" not in result.message
+    assert "401 Unauthorized" in result.message
+
+
 def test_check_verifies_personal_repository_and_project() -> None:
     def respond(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer token"
