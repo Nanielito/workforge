@@ -105,6 +105,14 @@ def test_workspace_config_template_for_github() -> None:
         "repository": "replace-with-repository",
         "project_number": 1,
         "labels": {},
+        "status": {
+            "field": "Status",
+            "values": {
+                "todo": "Todo",
+                "doing": "In Progress",
+                "done": "Done",
+            },
+        },
     }
 
 

@@ -27,7 +27,7 @@ class PlanningProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def move_item(self, item: CreatedItem, list_ref: str) -> ItemStatus:
+    async def move_item(self, item: CreatedItem, status_ref: str) -> ItemStatus:
         raise NotImplementedError
 
     @abstractmethod

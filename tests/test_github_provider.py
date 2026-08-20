@@ -200,3 +200,85 @@ def test_complete_task_updates_only_the_selected_managed_checkbox() -> None:
     )
 
     assert [task.done for task in status.tasks] == [True, False]
+
+
+def test_move_item_updates_project_status_from_configured_alias() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "number": 12,
+                    "html_url": "https://github.com/owner/workforge/issues/12",
+                    "title": "Add status view",
+                    "state": "open",
+                    "body": "",
+                },
+            )
+
+        payload = json.loads(request.content)
+        if "updateProjectV2ItemFieldValue" in payload["query"]:
+            assert payload["variables"] == {
+                "project": "project-node",
+                "item": "project-item-node",
+                "field": "status-field-node",
+                "option": "done-option",
+            }
+            return httpx.Response(200, json={"data": {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "project-item-node"}}}})
+
+        assert payload["variables"] == {
+            "owner": "owner",
+            "repository": "workforge",
+            "project": 1,
+            "issue": 12,
+        }
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "user": {
+                        "projectV2": {
+                            "id": "project-node",
+                            "fields": {
+                                "nodes": [
+                                    {
+                                        "id": "status-field-node",
+                                        "name": "Status",
+                                        "options": [
+                                            {"id": "todo-option", "name": "Todo"},
+                                            {"id": "done-option", "name": "Done"},
+                                        ],
+                                    }
+                                ]
+                            },
+                        }
+                    },
+                    "repository": {
+                        "issue": {
+                            "projectItems": {
+                                "nodes": [
+                                    {"id": "project-item-node", "project": {"id": "project-node"}}
+                                ]
+                            }
+                        }
+                    },
+                }
+            },
+        )
+
+    provider = GitHubProvider(
+        {
+            "owner": "owner",
+            "repository": "workforge",
+            "project_number": 1,
+            "status": {"field": "Status", "values": {"done": "Done"}},
+        },
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(
+        provider.move_item(CreatedItem(provider="github", id="12", title="Add status view"), "done")
+    )
+
+    assert status.id == "12"
