@@ -259,7 +259,15 @@ class GitHubProvider(PlanningProvider):
         return self._item_status_from_issue(issue, item)
 
     async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
-        raise NotImplementedError
+        if missing := self._missing_configuration():
+            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+        if not text.strip():
+            raise ValueError("Comment text cannot be empty.")
+
+        async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            await self._comment_issue(client, item.id, text)
+
+        return await self.get_item_status(item)
 
     async def move_item(self, item: CreatedItem, status_ref: str) -> ItemStatus:
         if missing := self._missing_configuration():
@@ -408,6 +416,14 @@ class GitHubProvider(PlanningProvider):
         )
         response.raise_for_status()
         return response.json()
+
+    async def _comment_issue(self, client: httpx.AsyncClient, issue_number: str, text: str) -> None:
+        response = await client.post(
+            f"https://api.github.com/repos/{self.owner}/{self.repository}/issues/{issue_number}/comments",
+            headers=self._rest_headers(),
+            json={"body": text},
+        )
+        response.raise_for_status()
 
     def _item_status_from_issue(self, issue: dict[str, Any], item: CreatedItem) -> ItemStatus:
         return ItemStatus(

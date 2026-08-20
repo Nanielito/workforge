@@ -333,3 +333,36 @@ def test_discover_items_paginates_and_filters_repository_state_and_label() -> No
     items = asyncio.run(provider.discover_items("feature"))
 
     assert [item.id for item in items] == ["1", "3"]
+
+
+def test_comment_item_adds_issue_comment_and_returns_status() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            assert request.url.path == "/repos/owner/workforge/issues/12/comments"
+            assert json.loads(request.content) == {"body": "Implementation complete."}
+            return httpx.Response(201, json={"id": 1})
+        return httpx.Response(
+            200,
+            json={
+                "number": 12,
+                "html_url": "https://github.com/owner/workforge/issues/12",
+                "title": "Add status view",
+                "state": "open",
+                "body": "",
+            },
+        )
+
+    provider = GitHubProvider(
+        {"owner": "owner", "repository": "workforge", "project_number": 1},
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(
+        provider.comment_item(
+            CreatedItem(provider="github", id="12", title="Add status view"),
+            "Implementation complete.",
+        )
+    )
+
+    assert status.id == "12"
