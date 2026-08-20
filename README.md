@@ -1,11 +1,10 @@
 # WorkForge
 
 WorkForge turns raw work inputs into structured planning items, then sends them
-to planning providers such as Trello, Jira, GitHub Issues, or Linear.
+to planning providers such as Trello and GitHub Projects.
 
-The first provider is Trello. The core model is provider-neutral so future
-integrations can translate the same requirements into issues, cards, tickets, or
-tasks.
+The core model is provider-neutral so the same requirements can become Trello
+cards or GitHub Issues attached to a Project v2.
 
 ## Goals
 
@@ -23,8 +22,9 @@ WorkForge uses semantic versioning.
 - Major releases may change CLI behavior, provider contracts, or saved output
   formats.
 
-The first stable Trello workflow release should be tagged as `v1.0.0` once the
-Trello create/status/agent-context/complete-task flow is merged and CI is green.
+`v1.0.0` is the stable Trello workflow release. The provider-neutral item
+terminology and GitHub Projects provider require a major release because they
+change saved output and CLI command names.
 
 Releases are created manually from the `Release` GitHub Actions workflow on
 `main`. The workflow updates the version and changelog, runs the test suite,
@@ -133,7 +133,7 @@ Add an implementation comment to a provider item:
 
 ```bash
 workforge comment-item workspaces/trello-example/inbox/sample-requirements.md \
-  --workspace workspaces/example \
+  --workspace workspaces/trello-example \
   --item "Fix UI" \
   --text "Started implementation from WorkForge agent context."
 ```
@@ -142,7 +142,7 @@ Move a provider item to another list or workflow column:
 
 ```bash
 workforge move-item workspaces/trello-example/inbox/sample-requirements.md \
-  --workspace workspaces/example \
+  --workspace workspaces/trello-example \
   --item "Fix UI" \
   --status doing
 ```
@@ -287,6 +287,45 @@ providers:
     labels:
       shopify: "trello-label-id"
 ```
+
+## GitHub Projects
+
+The GitHub provider supports Projects v2 owned by a personal account. It creates
+repository Issues, renders requirement tasks as GitHub checkboxes, and adds each
+Issue to the configured Project.
+
+```yaml
+providers:
+  github:
+    owner: github-user
+    repository: repository-name
+    project_number: 1
+    labels:
+      feature: enhancement
+    status:
+      field: Status
+      values:
+        todo: Todo
+        doing: In Progress
+        done: Done
+```
+
+Store a token with Issues and Projects read/write access in the workspace `.env`:
+
+```dotenv
+GITHUB_TOKEN=
+```
+
+Verify access without modifying GitHub:
+
+```bash
+workforge providers test --workspace .workforge --provider github
+```
+
+GitHub labels and Status options must already exist. Logical labels and status
+aliases map to their GitHub names through `workforge.yaml`; unmapped requirement
+labels are ignored. Project workflows may independently close an Issue when its
+Status moves to `Done`.
 
 ## Trello Labels
 
