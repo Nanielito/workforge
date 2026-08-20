@@ -24,7 +24,7 @@ def test_save_output_writes_json_file(tmp_path: Path) -> None:
     input_file = workspace / "inbox" / "requirements.md"
     payload = [{"title": "Fix UI"}]
 
-    output_path = _save_output(workspace, input_file, "cards.json", payload)
+    output_path = _save_output(workspace, input_file, "items.json", payload)
 
-    assert output_path == workspace / "output" / "requirements" / "cards.json"
+    assert output_path == workspace / "output" / "requirements" / "items.json"
     assert output_path.read_text() == '[\n  {\n    "title": "Fix UI"\n  }\n]\n'

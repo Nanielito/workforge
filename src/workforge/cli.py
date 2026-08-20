@@ -71,7 +71,7 @@ def create(
 def discover(
     input_file: Path | None = typer.Argument(
         None,
-        help="Optional input file used to choose output/<input-name>/cards.json.",
+        help="Optional input file used to choose output/<input-name>/items.json.",
     ),
     workspace: Path = typer.Option(..., "--workspace", "-w"),
     provider: str | None = typer.Option(None, "--provider", "-p"),
@@ -81,7 +81,7 @@ def discover(
         "--output-name",
         help="Output directory name when INPUT_FILE is omitted.",
     ),
-    save: bool = typer.Option(False, "--save", help="Save discovered cards as cards.json."),
+    save: bool = typer.Option(False, "--save", help="Save discovered items as items.json."),
 ) -> None:
     asyncio.run(_discover(input_file, workspace, provider, label, output_name, save))
 
@@ -190,7 +190,7 @@ async def _create(
 
     _echo_json(created)
     if save:
-        _save_output(runtime.path, input_file, "cards.json", created)
+        _save_output(runtime.path, input_file, "items.json", created)
 
 
 async def _test_provider(workspace: Path, provider_name: str | None) -> None:
@@ -219,7 +219,7 @@ async def _discover(
     _echo_json(discovered)
 
     if save:
-        _save_output(runtime.path, _output_ref_for(input_file, output_name), "cards.json", discovered)
+        _save_output(runtime.path, _output_ref_for(input_file, output_name), "items.json", discovered)
 
 
 async def _status(input_file: Path, workspace: Path, provider_name: str | None, save: bool) -> None:
@@ -350,11 +350,11 @@ async def _load_card_statuses(
 
 
 def _load_created_items(workspace_path: Path, input_file: Path, provider_name: str) -> list[CreatedItem]:
-    cards_path = _output_dir_for(workspace_path, input_file) / "cards.json"
-    if not cards_path.exists():
-        raise FileNotFoundError(f"Created cards output not found: {cards_path}")
+    items_path = _output_dir_for(workspace_path, input_file) / "items.json"
+    if not items_path.exists():
+        raise FileNotFoundError(f"Created items output not found: {items_path}")
 
-    raw_items = json.loads(cards_path.read_text())
+    raw_items = json.loads(items_path.read_text())
     return [
         CreatedItem.model_validate(item)
         for item in raw_items
