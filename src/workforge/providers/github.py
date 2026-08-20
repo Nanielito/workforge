@@ -16,6 +16,18 @@ query($owner: String!, $repository: String!, $project: Int!) {
 }
 """
 
+_PROJECT_QUERY = """
+query($owner: String!, $project: Int!) {
+  user(login: $owner) { projectV2(number: $project) { id } }
+}
+"""
+
+_ADD_PROJECT_ITEM_MUTATION = """
+mutation($project: ID!, $content: ID!) {
+  addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id } }
+}
+"""
+
 
 class GitHubProvider(PlanningProvider):
     name = "github"
@@ -89,6 +101,7 @@ class GitHubProvider(PlanningProvider):
             raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
 
         async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            project_id = await self._get_project_id(client)
             response = await client.post(
                 f"https://api.github.com/repos/{self.owner}/{self.repository}/issues",
                 headers={
@@ -104,6 +117,12 @@ class GitHubProvider(PlanningProvider):
             )
             response.raise_for_status()
             issue = response.json()
+            try:
+                await self._add_issue_to_project(client, project_id, issue["node_id"])
+            except (httpx.HTTPError, RuntimeError, ValueError) as error:
+                raise RuntimeError(
+                    f"Issue created at {issue.get('html_url', '')}, but adding it to GitHub Project v2 failed: {error}"
+                ) from error
 
         return CreatedItem(
             provider=self.name,
@@ -128,6 +147,37 @@ class GitHubProvider(PlanningProvider):
         if not isinstance(self.labels, dict):
             return []
         return [label for name in logical_names if isinstance(label := self.labels.get(name), str) and label]
+
+    async def _get_project_id(self, client: httpx.AsyncClient) -> str:
+        payload = await self._graphql(
+            client,
+            _PROJECT_QUERY,
+            {"owner": self.owner, "project": self.project_number},
+        )
+        owner = payload.get("data", {}).get("user") or {}
+        project = owner.get("projectV2")
+        if not project:
+            raise RuntimeError(f"GitHub Project v2 not found or inaccessible: {self.project_number}")
+        return project["id"]
+
+    async def _add_issue_to_project(self, client: httpx.AsyncClient, project_id: str, issue_id: str) -> None:
+        await self._graphql(
+            client,
+            _ADD_PROJECT_ITEM_MUTATION,
+            {"project": project_id, "content": issue_id},
+        )
+
+    async def _graphql(self, client: httpx.AsyncClient, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+        response = await client.post(
+            "https://api.github.com/graphql",
+            headers={"Authorization": f"Bearer {self.token}"},
+            json={"query": query, "variables": variables},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if errors := payload.get("errors"):
+            raise RuntimeError(errors[0].get("message", "GitHub GraphQL error."))
+        return payload
 
     async def get_card_status(self, item: CreatedItem) -> CardStatus:
         raise NotImplementedError
