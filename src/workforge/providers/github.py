@@ -108,19 +108,8 @@ class GitHubProvider(PlanningProvider):
         self.transport = transport
 
     async def check(self) -> ProviderCheck:
-        missing = self._missing_configuration()
-        if missing:
-            return ProviderCheck(
-                provider=self.name,
-                ok=False,
-                message=f"Missing configuration: {', '.join(missing)}",
-            )
-        if isinstance(self.project_number, bool) or not isinstance(self.project_number, int):
-            return ProviderCheck(
-                provider=self.name,
-                ok=False,
-                message="providers.github.project_number must be an integer.",
-            )
+        if error := self._configuration_error():
+            return ProviderCheck(provider=self.name, ok=False, message=error)
 
         try:
             async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
@@ -139,10 +128,10 @@ class GitHubProvider(PlanningProvider):
                 response.raise_for_status()
                 payload = response.json()
         except (httpx.HTTPError, ValueError) as error:
-            return ProviderCheck(provider=self.name, ok=False, message=f"GitHub request failed: {error}")
+            return ProviderCheck(provider=self.name, ok=False, message=f"GitHub request failed: {self._safe_message(error)}")
 
         if errors := payload.get("errors"):
-            return ProviderCheck(provider=self.name, ok=False, message=errors[0].get("message", "GitHub GraphQL error."))
+            return ProviderCheck(provider=self.name, ok=False, message=self._safe_message(errors[0].get("message", "GitHub GraphQL error.")))
 
         owner = payload.get("data", {}).get("user")
         if not owner:
@@ -159,8 +148,7 @@ class GitHubProvider(PlanningProvider):
         )
 
     async def create_requirement(self, requirement: Requirement) -> CreatedItem:
-        if missing := self._missing_configuration():
-            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+        self._require_configuration()
 
         async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
             project_id = await self._get_project_id(client)
@@ -205,6 +193,21 @@ class GitHubProvider(PlanningProvider):
             if value in (None, "")
         ]
 
+    def _configuration_error(self) -> str | None:
+        if missing := self._missing_configuration():
+            return f"Missing configuration: {', '.join(missing)}"
+        if isinstance(self.project_number, bool) or not isinstance(self.project_number, int) or self.project_number < 1:
+            return "providers.github.project_number must be a positive integer."
+        return None
+
+    def _require_configuration(self) -> None:
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+
+    def _safe_message(self, error: object) -> str:
+        message = str(error)
+        return message.replace(self.token, "[REDACTED]") if self.token else message
+
     def _label_names_for(self, logical_names: list[str]) -> list[str]:
         if not isinstance(self.labels, dict):
             return []
@@ -244,12 +247,11 @@ class GitHubProvider(PlanningProvider):
         response.raise_for_status()
         payload = response.json()
         if errors := payload.get("errors"):
-            raise RuntimeError(errors[0].get("message", "GitHub GraphQL error."))
+            raise RuntimeError(self._safe_message(errors[0].get("message", "GitHub GraphQL error.")))
         return payload
 
     async def get_item_status(self, item: CreatedItem) -> ItemStatus:
-        if missing := self._missing_configuration():
-            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+        self._require_configuration()
 
         async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
             issue = await self._get_issue(client, item.id)
@@ -257,8 +259,7 @@ class GitHubProvider(PlanningProvider):
         return self._item_status_from_issue(issue, item)
 
     async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
-        if missing := self._missing_configuration():
-            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+        self._require_configuration()
 
         async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
             issue = await self._get_issue(client, item.id)
@@ -270,8 +271,7 @@ class GitHubProvider(PlanningProvider):
         return self._item_status_from_issue(issue, item)
 
     async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
-        if missing := self._missing_configuration():
-            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+        self._require_configuration()
         if not text.strip():
             raise ValueError("Comment text cannot be empty.")
 
@@ -281,8 +281,7 @@ class GitHubProvider(PlanningProvider):
         return await self.get_item_status(item)
 
     async def move_item(self, item: CreatedItem, status_ref: str) -> ItemStatus:
-        if missing := self._missing_configuration():
-            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+        self._require_configuration()
         if not isinstance(self.status, dict) or not self.status.get("field"):
             raise RuntimeError("Missing configuration: providers.github.status.field")
 
@@ -302,8 +301,7 @@ class GitHubProvider(PlanningProvider):
         return await self.get_item_status(item)
 
     async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
-        if missing := self._missing_configuration():
-            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+        self._require_configuration()
 
         discovered: list[CreatedItem] = []
         cursor: str | None = None
