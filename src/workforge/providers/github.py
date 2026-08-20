@@ -1,8 +1,9 @@
+import re
 from typing import Any
 
 import httpx
 
-from workforge.models import CreatedItem, ItemStatus, ProviderCheck, Requirement
+from workforge.models import CreatedItem, ItemStatus, ProviderCheck, Requirement, TaskStatus
 from workforge.providers.base import PlanningProvider
 
 
@@ -27,6 +28,8 @@ mutation($project: ID!, $content: ID!) {
   addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id } }
 }
 """
+
+_TASK_PATTERN = re.compile(r"^- \[([ xX])\] (.+)$")
 
 
 class GitHubProvider(PlanningProvider):
@@ -104,11 +107,7 @@ class GitHubProvider(PlanningProvider):
             project_id = await self._get_project_id(client)
             response = await client.post(
                 f"https://api.github.com/repos/{self.owner}/{self.repository}/issues",
-                headers={
-                    "Authorization": f"Bearer {self.token}",
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
+                headers=self._rest_headers(),
                 json={
                     "title": requirement.title,
                     "body": _build_issue_body(requirement),
@@ -180,7 +179,20 @@ class GitHubProvider(PlanningProvider):
         return payload
 
     async def get_item_status(self, item: CreatedItem) -> ItemStatus:
-        raise NotImplementedError
+        if missing := self._missing_configuration():
+            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+
+        async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            issue = await self._get_issue(client, item.id)
+
+        return ItemStatus(
+            provider=self.name,
+            id=str(issue["number"]),
+            url=issue.get("html_url") or item.url,
+            title=issue.get("title") or item.title,
+            closed=issue.get("state") == "closed",
+            tasks=_task_statuses_from_issue_body(issue.get("body") or ""),
+        )
 
     async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
         raise NotImplementedError
@@ -194,6 +206,21 @@ class GitHubProvider(PlanningProvider):
     async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
         raise NotImplementedError
 
+    async def _get_issue(self, client: httpx.AsyncClient, issue_number: str) -> dict[str, Any]:
+        response = await client.get(
+            f"https://api.github.com/repos/{self.owner}/{self.repository}/issues/{issue_number}",
+            headers=self._rest_headers(),
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def _rest_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
 
 def _build_issue_body(requirement: Requirement) -> str:
     parts = [requirement.description] if requirement.description else []
@@ -201,3 +228,23 @@ def _build_issue_body(requirement: Requirement) -> str:
         tasks = "\n".join(f"- [{'x' if task.done else ' '}] {task.title}" for task in requirement.tasks)
         parts.append(f"## Tasks\n\n{tasks}")
     return "\n\n".join(parts)
+
+
+def _task_statuses_from_issue_body(body: str) -> list[TaskStatus]:
+    tasks: list[TaskStatus] = []
+    in_tasks = False
+    for line in body.splitlines():
+        if line.strip() == "## Tasks":
+            in_tasks = True
+            continue
+        if in_tasks and line.startswith("## "):
+            break
+        if in_tasks and (match := _TASK_PATTERN.fullmatch(line)):
+            tasks.append(
+                TaskStatus(
+                    id=f"task-{len(tasks) + 1}",
+                    title=match.group(2).strip(),
+                    done=match.group(1).casefold() == "x",
+                )
+            )
+    return tasks

@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from workforge.models import Requirement, WorkTask
+from workforge.models import CreatedItem, Requirement, WorkTask
 from workforge.providers.github import GitHubProvider
 from workforge.providers.registry import build_provider
 
@@ -124,3 +124,41 @@ def test_create_requirement_reports_issue_when_project_insertion_fails() -> None
 
     with pytest.raises(RuntimeError, match=r"Issue created at https://github.com/owner/workforge/issues/12"):
         asyncio.run(provider.create_requirement(Requirement(title="Add status view")))
+
+
+def test_get_item_status_reads_issue_and_managed_tasks() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/repos/owner/workforge/issues/12"
+        return httpx.Response(
+            200,
+            json={
+                "number": 12,
+                "html_url": "https://github.com/owner/workforge/issues/12",
+                "title": "Add status view",
+                "state": "closed",
+                "body": (
+                    "- [x] Unrelated checkbox\n\n"
+                    "## Tasks\n\n"
+                    "- [ ] Build view\n"
+                    "- [x] Add tests\n\n"
+                    "## Notes\n\n"
+                    "- [ ] Another unrelated checkbox"
+                ),
+            },
+        )
+
+    provider = GitHubProvider(
+        {"owner": "owner", "repository": "workforge", "project_number": 1},
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(
+        provider.get_item_status(CreatedItem(provider="github", id="12", title="Fallback title"))
+    )
+
+    assert status.closed is True
+    assert [(task.id, task.title, task.done) for task in status.tasks] == [
+        ("task-1", "Build view", False),
+        ("task-2", "Add tests", True),
+    ]
