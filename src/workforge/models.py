@@ -34,7 +34,7 @@ class TaskStatus(BaseModel):
     done: bool = False
 
 
-class CardStatus(BaseModel):
+class ItemStatus(BaseModel):
     provider: str
     id: str
     url: str | None = None
