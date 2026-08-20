@@ -109,12 +109,12 @@ class TrelloProvider(PlanningProvider):
 
         return await self.get_item_status(item)
 
-    async def move_item(self, item: CreatedItem, list_ref: str) -> ItemStatus:
+    async def move_item(self, item: CreatedItem, status_ref: str) -> ItemStatus:
         check = await self.check()
         if not check.ok:
             raise RuntimeError(check.message)
 
-        list_id = self._configured_list_id(list_ref) or list_ref
+        list_id = self._configured_list_id(status_ref) or status_ref
 
         async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
             await self._move_card(client, item.id, list_id)

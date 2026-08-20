@@ -144,10 +144,10 @@ Move a provider item to another list or workflow column:
 workforge move-item workspaces/trello-example/inbox/sample-requirements.md \
   --workspace workspaces/example \
   --item "Fix UI" \
-  --list doing
+  --status doing
 ```
 
-For Trello, `--list` accepts a Trello list ID or a configured logical list name.
+For Trello, `--status` accepts a Trello list ID or a configured logical list name.
 By default, WorkForge refreshes `status.json` and `agent-context.md` after
 commenting or moving an item.
 

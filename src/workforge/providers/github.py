@@ -29,6 +29,39 @@ mutation($project: ID!, $content: ID!) {
 }
 """
 
+_STATUS_CONTEXT_QUERY = """
+query($owner: String!, $repository: String!, $project: Int!, $issue: Int!) {
+  user(login: $owner) {
+    projectV2(number: $project) {
+      id
+      fields(first: 50) {
+        nodes {
+          ... on ProjectV2SingleSelectField { id name options { id name } }
+        }
+      }
+    }
+  }
+  repository(owner: $owner, name: $repository) {
+    issue(number: $issue) {
+      projectItems(first: 20) { nodes { id project { id } } }
+    }
+  }
+}
+"""
+
+_UPDATE_STATUS_MUTATION = """
+mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+  updateProjectV2ItemFieldValue(
+    input: {
+      projectId: $project
+      itemId: $item
+      fieldId: $field
+      value: {singleSelectOptionId: $option}
+    }
+  ) { projectV2Item { id } }
+}
+"""
+
 _TASK_PATTERN = re.compile(r"^- \[([ xX])\] (.+)$")
 
 
@@ -46,6 +79,7 @@ class GitHubProvider(PlanningProvider):
         self.repository = config.get("repository", "")
         self.project_number = config.get("project_number")
         self.labels = config.get("labels", {})
+        self.status = config.get("status", {})
         self.transport = transport
 
     async def check(self) -> ProviderCheck:
@@ -203,8 +237,26 @@ class GitHubProvider(PlanningProvider):
     async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
         raise NotImplementedError
 
-    async def move_item(self, item: CreatedItem, list_ref: str) -> ItemStatus:
-        raise NotImplementedError
+    async def move_item(self, item: CreatedItem, status_ref: str) -> ItemStatus:
+        if missing := self._missing_configuration():
+            raise RuntimeError(f"Missing configuration: {', '.join(missing)}")
+        if not isinstance(self.status, dict) or not self.status.get("field"):
+            raise RuntimeError("Missing configuration: providers.github.status.field")
+
+        async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            context = await self._get_status_context(client, item, status_ref)
+            await self._graphql(
+                client,
+                _UPDATE_STATUS_MUTATION,
+                {
+                    "project": context["project_id"],
+                    "item": context["item_id"],
+                    "field": context["field_id"],
+                    "option": context["option_id"],
+                },
+            )
+
+        return await self.get_item_status(item)
 
     async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
         raise NotImplementedError
@@ -216,6 +268,58 @@ class GitHubProvider(PlanningProvider):
         )
         response.raise_for_status()
         return response.json()
+
+    async def _get_status_context(
+        self,
+        client: httpx.AsyncClient,
+        item: CreatedItem,
+        status_ref: str,
+    ) -> dict[str, str]:
+        payload = await self._graphql(
+            client,
+            _STATUS_CONTEXT_QUERY,
+            {
+                "owner": self.owner,
+                "repository": self.repository,
+                "project": self.project_number,
+                "issue": int(item.id),
+            },
+        )
+        project = (payload.get("data", {}).get("user") or {}).get("projectV2") or {}
+        project_id = project.get("id")
+        if not project_id:
+            raise ValueError(f"GitHub Project v2 not found: {self.project_number}")
+
+        field_name = str(self.status["field"])
+        fields = [field for field in project.get("fields", {}).get("nodes", []) if field]
+        field = next((field for field in fields if field.get("name", "").casefold() == field_name.casefold()), None)
+        if not field:
+            raise ValueError(f"GitHub Project status field not found: {field_name}")
+
+        values = self.status.get("values", {})
+        option_name = values.get(status_ref, status_ref) if isinstance(values, dict) else status_ref
+        option = next(
+            (option for option in field.get("options", []) if option.get("name", "").casefold() == option_name.casefold()),
+            None,
+        )
+        if not option:
+            raise ValueError(f"GitHub Project status option not found: {option_name}")
+
+        issue = (payload.get("data", {}).get("repository") or {}).get("issue") or {}
+        project_items = issue.get("projectItems", {}).get("nodes", [])
+        project_item = next(
+            (project_item for project_item in project_items if project_item.get("project", {}).get("id") == project_id),
+            None,
+        )
+        if not project_item:
+            raise ValueError(f"Issue is not attached to GitHub Project v2: {item.id}")
+
+        return {
+            "project_id": project_id,
+            "item_id": project_item["id"],
+            "field_id": field["id"],
+            "option_id": option["id"],
+        }
 
     async def _update_issue_body(
         self,

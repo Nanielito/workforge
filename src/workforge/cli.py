@@ -146,11 +146,11 @@ def move_item(
     input_file: Path,
     workspace: Path = typer.Option(..., "--workspace", "-w"),
     item: str = typer.Option(..., "--item", "-i", help="Item title, item ID, or unique title substring."),
-    list_ref: str = typer.Option(..., "--list", "-l", help="Destination list ID or configured list alias."),
+    status: str = typer.Option(..., "--status", "-s", help="Destination status name or configured alias."),
     provider: str | None = typer.Option(None, "--provider", "-p"),
     save: bool = typer.Option(True, "--save/--no-save", help="Refresh status.json and agent-context.md after moving."),
 ) -> None:
-    asyncio.run(_move_item(input_file, workspace, item, list_ref, provider, save))
+    asyncio.run(_move_item(input_file, workspace, item, status, provider, save))
 
 
 @providers_app.command("test")
@@ -308,7 +308,7 @@ async def _move_item(
     input_file: Path,
     workspace: Path,
     item_ref: str,
-    list_ref: str,
+    status_ref: str,
     provider_name: str | None,
     save: bool,
 ) -> None:
@@ -318,7 +318,7 @@ async def _move_item(
     provider = build_provider(selected_provider, provider_config, runtime.env)
     created_items = _load_created_items(runtime.path, input_file, selected_provider)
     item = _find_created_item(created_items, item_ref)
-    updated_status = await provider.move_item(item, list_ref)
+    updated_status = await provider.move_item(item, status_ref)
 
     _echo_json(updated_status.model_dump())
 
@@ -572,6 +572,14 @@ def _workspace_config_template(name: str, provider: str, namespace: str) -> str:
             "repository": "replace-with-repository",
             "project_number": 1,
             "labels": {},
+            "status": {
+                "field": "Status",
+                "values": {
+                    "todo": "Todo",
+                    "doing": "In Progress",
+                    "done": "Done",
+                },
+            },
         }
     else:
         provider_config = {}
