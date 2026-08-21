@@ -344,6 +344,29 @@ def test_move_item_updates_project_status_from_configured_alias() -> None:
     assert status.id == "12"
 
 
+def test_claim_item_assigns_authenticated_user() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/user":
+            return httpx.Response(200, json={"login": "octocat"})
+        if request.url.path.endswith("/assignees"):
+            assert json.loads(request.content) == {"assignees": ["octocat"]}
+            return httpx.Response(201, json={})
+        return httpx.Response(
+            200,
+            json={"number": 12, "title": "Claim me", "state": "open", "body": ""},
+        )
+
+    provider = GitHubProvider(
+        {"owner": "owner", "repository": "workforge", "project_number": 1},
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(provider.claim_item(CreatedItem(provider="github", id="12", title="Claim me")))
+
+    assert status.id == "12"
+
+
 def test_discover_items_paginates_and_filters_repository_state_and_label() -> None:
     def issue(number: int, repository: str = "owner/workforge", state: str = "OPEN") -> dict[str, object]:
         return {

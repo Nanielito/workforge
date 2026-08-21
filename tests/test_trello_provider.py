@@ -2,7 +2,7 @@ import asyncio
 
 import httpx
 
-from workforge.models import Requirement
+from workforge.models import CreatedItem, Requirement
 from workforge.providers.trello import (
     TrelloProvider,
     _build_description,
@@ -149,6 +149,30 @@ def test_discover_items_filters_member_list_and_label() -> None:
     items = asyncio.run(provider.discover_items("feature", "@nanielito", "doing"))
 
     assert [item.id for item in items] == ["card-1"]
+
+
+def test_claim_item_assigns_authenticated_member() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/1/lists/list-1":
+            return httpx.Response(200, json={"idBoard": "board-1"})
+        if request.url.path == "/1/members/me":
+            return httpx.Response(200, json={"id": "member-1"})
+        if request.url.path == "/1/cards/card-1/idMembers":
+            assert request.url.params["value"] == "member-1"
+            return httpx.Response(200, json={})
+        if request.url.path == "/1/cards/card-1/checklists":
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json={"id": "card-1", "name": "Claim me", "closed": False})
+
+    provider = TrelloProvider(
+        {"list_id": "list-1"},
+        {"TRELLO_API_KEY": "key", "TRELLO_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(provider.claim_item(CreatedItem(provider="trello", id="card-1", title="Claim me")))
+
+    assert status.id == "card-1"
 
 
 def test_discover_items_resolves_me() -> None:
