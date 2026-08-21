@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from workforge.models import CreatedItem, ItemStatus, ProviderCheck, Requirement
+from workforge.models import CreatedItem, ItemStatus, ProviderCheck, Requirement, TaskStatus
 from workforge.providers.base import PlanningProvider
 
 
@@ -124,10 +124,64 @@ class JiraProvider(PlanningProvider):
         return str(version_id)
 
     async def get_item_status(self, item: CreatedItem) -> ItemStatus:
-        raise NotImplementedError("Jira status reading is not implemented yet.")
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.site_url,
+                auth=(self.email, self.api_token),
+                timeout=20,
+                transport=self.transport,
+            ) as client:
+                issue = await self._get_issue(client, item.id)
+        except (httpx.HTTPError, ValueError) as error:
+            raise RuntimeError(f"Jira request failed: {self._safe_message(error)}") from error
+
+        return self._item_status_from_issue(issue, item)
 
     async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
-        raise NotImplementedError("Jira task completion is not implemented yet.")
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.site_url,
+                auth=(self.email, self.api_token),
+                timeout=20,
+                transport=self.transport,
+            ) as client:
+                issue = await self._get_issue(client, item.id)
+                description = issue.get("fields", {}).get("description") or _empty_adf_document()
+                task = _find_adf_task(description, task_ref)
+                if task.get("attrs", {}).get("state") != "DONE":
+                    task.setdefault("attrs", {})["state"] = "DONE"
+                    response = await client.put(f"/rest/api/3/issue/{item.id}", json={"fields": {"description": description}})
+                    response.raise_for_status()
+        except (httpx.HTTPError, ValueError) as error:
+            raise RuntimeError(f"Jira request failed: {self._safe_message(error)}") from error
+
+        return self._item_status_from_issue(issue, item)
+
+    async def _get_issue(self, client: httpx.AsyncClient, issue_id: str) -> dict[str, Any]:
+        response = await client.get(
+            f"/rest/api/3/issue/{issue_id}",
+            params={"fields": "summary,status,description"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def _item_status_from_issue(self, issue: dict[str, Any], item: CreatedItem) -> ItemStatus:
+        fields = issue.get("fields", {})
+        status_category = fields.get("status", {}).get("statusCategory", {}).get("key")
+        return ItemStatus(
+            provider=self.name,
+            id=issue.get("key", item.id),
+            url=f"{self.site_url}/browse/{issue.get('key', item.id)}",
+            title=fields.get("summary") or item.title,
+            closed=status_category == "done",
+            tasks=_task_statuses_from_adf(fields.get("description")),
+        )
 
     async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
         raise NotImplementedError("Jira comments are not implemented yet.")
@@ -170,3 +224,51 @@ def _adf_document(requirement: Requirement) -> dict[str, Any]:
             ]
         )
     return {"type": "doc", "version": 1, "content": content}
+
+
+def _empty_adf_document() -> dict[str, Any]:
+    return {"type": "doc", "version": 1, "content": []}
+
+
+def _managed_adf_tasks(description: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(description, dict):
+        return []
+    for node in description.get("content", []):
+        if node.get("type") == "taskList" and node.get("attrs", {}).get("localId") == "workforge-tasks":
+            return [task for task in node.get("content", []) if task.get("type") == "taskItem"]
+    return []
+
+
+def _task_title(task: dict[str, Any]) -> str:
+    return "".join(node.get("text", "") for node in task.get("content", []) if node.get("type") == "text")
+
+
+def _task_statuses_from_adf(description: dict[str, Any] | None) -> list[TaskStatus]:
+    return [
+        TaskStatus(
+            id=task.get("attrs", {}).get("localId"),
+            title=_task_title(task),
+            done=task.get("attrs", {}).get("state") == "DONE",
+        )
+        for task in _managed_adf_tasks(description)
+    ]
+
+
+def _find_adf_task(description: dict[str, Any], task_ref: str) -> dict[str, Any]:
+    tasks = _managed_adf_tasks(description)
+    exact = [
+        task
+        for task in tasks
+        if task.get("attrs", {}).get("localId") == task_ref or _task_title(task).casefold() == task_ref.casefold()
+    ]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        raise ValueError(f"Multiple tasks matched exactly: {task_ref}")
+
+    partial = [task for task in tasks if task_ref.casefold() in _task_title(task).casefold()]
+    if len(partial) == 1:
+        return partial[0]
+    if len(partial) > 1:
+        raise ValueError(f"Multiple tasks matched '{task_ref}': {', '.join(_task_title(task) for task in partial)}")
+    raise ValueError(f"Task not found: {task_ref}")
