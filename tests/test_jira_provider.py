@@ -60,6 +60,26 @@ def test_check_redacts_credentials_from_errors() -> None:
     assert result.message == "Jira request failed: [REDACTED] for [REDACTED] failed"
 
 
+def test_check_includes_jira_error_details_and_redacts_credentials() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            401,
+            json={"errorMessages": ["Token token rejected"], "errors": {"email": "user@example.com denied"}},
+        )
+
+    provider = JiraProvider(
+        {"site_url": "https://example.atlassian.net", "project_key": "WF", "issue_type": "Task"},
+        {"JIRA_EMAIL": "user@example.com", "JIRA_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    result = asyncio.run(provider.check())
+
+    assert result.ok is False
+    assert "Token [REDACTED] rejected" in result.message
+    assert "[REDACTED] denied" in result.message
+
+
 def test_registry_builds_jira_provider() -> None:
     assert isinstance(build_provider("jira", {}, {}), JiraProvider)
 
@@ -184,6 +204,8 @@ def test_find_adf_task_supports_id_exact_title_and_unique_substring() -> None:
     assert _find_adf_task(description, "parser")["attrs"]["localId"] == "workforge-task-1"
     with pytest.raises(ValueError, match="Multiple tasks matched"):
         _find_adf_task(description, "a")
+    with pytest.raises(ValueError, match="Task not found"):
+        _find_adf_task({"type": "doc", "version": 1, "content": []}, "missing")
 
 
 def test_get_item_status_reads_jira_status_and_tasks() -> None:

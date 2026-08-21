@@ -74,6 +74,14 @@ class JiraProvider(PlanningProvider):
 
     def _safe_message(self, error: object) -> str:
         message = str(error)
+        if isinstance(error, httpx.HTTPStatusError):
+            try:
+                payload = error.response.json()
+                details = [*payload.get("errorMessages", []), *payload.get("errors", {}).values()]
+                if details:
+                    message += f": {'; '.join(str(detail) for detail in details)}"
+            except (ValueError, AttributeError):
+                pass
         for secret in (self.api_token, self.email):
             if secret:
                 message = message.replace(secret, "[REDACTED]")
