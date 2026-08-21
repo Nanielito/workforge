@@ -13,14 +13,13 @@ on:
           - minor
           - patch
 
-permissions:
-  contents: write
-
 jobs:
   release:
     name: Build and release
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Check out repository
@@ -100,6 +99,12 @@ jobs:
           python -m pip install --upgrade twine
           python -m twine check dist/*
 
+      - name: Store distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
       - name: Commit version and tag
         env:
           NEW_VERSION: ${{ steps.bump.outputs.new_version }}
@@ -118,3 +123,23 @@ jobs:
           name: v${{ steps.bump.outputs.new_version }}
           body_path: CHANGELOG.md
           files: dist/*
+
+  publish:
+    name: Publish to PyPI
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/workforge
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish distributions
+        uses: pypa/gh-action-pypi-publish@release/v1
