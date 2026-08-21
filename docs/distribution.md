@@ -5,16 +5,15 @@ release record; PyPI will be the package distribution channel. This gives users
 an isolated `workforge` command without requiring a repository clone or a
 development environment.
 
-## Current and target state
+## Current state
 
-The current release workflow tests and builds WorkForge, updates the version
-and changelog, creates a Git tag, and uploads the wheel and source distribution
-to a GitHub Release.
+The release workflow tests and builds WorkForge, updates the version and
+changelog, creates a Git tag, and uploads the wheel and source distribution to
+both a GitHub Release and PyPI. The PyPI job uses Trusted Publishing and a
+separate GitHub environment so it never receives the repository write token.
 
-Issue [#37](https://github.com/Nanielito/workforge/issues/37) tracks the remaining
-work needed to publish those same distributions to PyPI. Commands in this guide
-that install `workforge` from PyPI will work after that issue is completed and a
-new release is published.
+PyPI installation commands will work after the one-time publisher setup is
+completed and the first release using the publish job succeeds.
 
 ## User installation
 
@@ -110,13 +109,13 @@ Before the first public release, a project owner must:
    selected for publishing (recommended: `pypi`).
 4. Create the matching protected GitHub environment and require approval if a
    second pair of eyes is desired for production publication.
-5. Grant the publish job only `id-token: write`; do not store a long-lived PyPI
-   API token in the repository.
+5. Confirm the publish job has only `id-token: write`; do not store a long-lived
+   PyPI API token in the repository.
 
-The release workflow should publish with the official
+The release workflow publishes with the official
 `pypa/gh-action-pypi-publish` action after the distributions pass tests, build,
-and metadata validation. Pin third-party GitHub Actions to reviewed versions and
-keep their permissions minimal.
+and metadata validation. Keep third-party GitHub Actions on reviewed versions
+and their permissions minimal.
 
 TestPyPI may be used for an initial pipeline check, but it has a separate account,
 project namespace, and package index. Passing TestPyPI does not reserve the name

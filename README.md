@@ -31,8 +31,8 @@ Releases are created manually from the `Release` GitHub Actions workflow on
 builds and validates the wheel and source distribution, creates the Git tag,
 and attaches both distributions to a GitHub Release.
 
-See the [distribution and release guide](docs/distribution.md) for the current
-release process and the planned public PyPI distribution workflow.
+See the [distribution and release guide](https://github.com/Nanielito/workforge/blob/main/docs/distribution.md)
+for the release process, public PyPI workflow, and required one-time setup.
 
 ### Migrating from v1 to v2
 
@@ -61,9 +61,9 @@ GitHub Actions runs on pull requests and pushes to `main`.
 
 ## Provider design documentation
 
-- [Trello provider design](docs/trello-provider-design.md)
-- [GitHub Projects provider design](docs/github-provider-design.md)
-- [Jira Cloud provider design](docs/jira-provider-design.md)
+- [Trello provider design](https://github.com/Nanielito/workforge/blob/main/docs/trello-provider-design.md)
+- [GitHub Projects provider design](https://github.com/Nanielito/workforge/blob/main/docs/github-provider-design.md)
+- [Jira Cloud provider design](https://github.com/Nanielito/workforge/blob/main/docs/jira-provider-design.md)
 
 ## Quick Start
 

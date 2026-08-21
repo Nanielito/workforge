@@ -8,6 +8,21 @@ version = "2.4.0"
 description = "Turn work inputs into provider-neutral requirements and planning items."
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [
+  { name = "Daniel Ramirez" },
+]
+keywords = ["cli", "github-projects", "jira", "planning", "trello"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+]
 dependencies = [
   "httpx>=0.27.0",
   "pydantic>=2.8.0",
@@ -24,6 +39,12 @@ dev = [
 
 [project.scripts]
 workforge = "workforge.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/Nanielito/workforge"
+Repository = "https://github.com/Nanielito/workforge.git"
+Issues = "https://github.com/Nanielito/workforge/issues"
+Changelog = "https://github.com/Nanielito/workforge/blob/main/CHANGELOG.md"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
