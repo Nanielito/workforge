@@ -155,6 +155,18 @@ def move_item(
     asyncio.run(_move_item(input_file, workspace, item, status, provider, save))
 
 
+@app.command("claim-item")
+def claim_item(
+    input_file: Path,
+    workspace: Path = typer.Option(..., "--workspace", "-w"),
+    item: str = typer.Option(..., "--item", "-i", help="Item title, item ID, or unique title substring."),
+    assignee: str = typer.Option("@me", "--assignee", "-a", help="Provider username or @me."),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Refresh status.json and agent-context.md after assignment."),
+) -> None:
+    asyncio.run(_claim_item(input_file, workspace, item, assignee, provider, save))
+
+
 @providers_app.command("test")
 def test_provider(
     workspace: Path = typer.Option(..., "--workspace", "-w"),
@@ -326,6 +338,26 @@ async def _move_item(
 
     _echo_json(updated_status.model_dump())
 
+    if save:
+        await _refresh_saved_context(runtime, input_file, provider_name)
+
+
+async def _claim_item(
+    input_file: Path,
+    workspace: Path,
+    item_ref: str,
+    assignee_ref: str,
+    provider_name: str | None,
+    save: bool,
+) -> None:
+    runtime = load_workspace(workspace)
+    selected_provider = provider_name or runtime.config.default_provider
+    provider_config = runtime.config.providers.get(selected_provider, {})
+    provider = build_provider(selected_provider, provider_config, runtime.env)
+    item = _find_created_item(_load_created_items(runtime.path, input_file, selected_provider), item_ref)
+    updated_status = await provider.claim_item(item, assignee_ref)
+
+    _echo_json(updated_status.model_dump())
     if save:
         await _refresh_saved_context(runtime, input_file, provider_name)
 

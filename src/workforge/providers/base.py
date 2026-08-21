@@ -31,6 +31,10 @@ class PlanningProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def claim_item(self, item: CreatedItem, assignee_ref: str = "@me") -> ItemStatus:
+        raise NotImplementedError
+
+    @abstractmethod
     async def discover_items(
         self,
         label_ref: str | None = None,

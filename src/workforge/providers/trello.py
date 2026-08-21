@@ -127,6 +127,22 @@ class TrelloProvider(PlanningProvider):
 
         return await self.get_item_status(item)
 
+    async def claim_item(self, item: CreatedItem, assignee_ref: str = "@me") -> ItemStatus:
+        check = await self.check()
+        if not check.ok:
+            raise RuntimeError(check.message)
+
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20, transport=self.transport) as client:
+            board_id = await self._get_board_id_for_list(client, self.list_id)
+            member_id = await self._resolve_member_id(client, board_id, assignee_ref)
+            response = await client.post(
+                f"/cards/{item.id}/idMembers",
+                params={**self._auth_params(), "value": member_id},
+            )
+            response.raise_for_status()
+
+        return await self.get_item_status(item)
+
     async def discover_items(
         self,
         label_ref: str | None = None,

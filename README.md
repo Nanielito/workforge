@@ -131,6 +131,14 @@ workflow statuses:
 workforge discover --workspace workspaces/jira-example --provider jira --assignee @me --status doing --save
 ```
 
+After choosing an existing item, assign it to the authenticated provider user:
+
+```bash
+workforge claim-item requirements.md --workspace workspaces/my-project --item "Fix login"
+```
+
+Use `--assignee <provider-user>` to assign it to someone else. Assignment remains optional when items are created.
+
 Check provider item status from saved `items.json`:
 
 ```bash

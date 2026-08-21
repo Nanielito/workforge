@@ -310,6 +310,24 @@ class GitHubProvider(PlanningProvider):
 
         return await self.get_item_status(item)
 
+    async def claim_item(self, item: CreatedItem, assignee_ref: str = "@me") -> ItemStatus:
+        self._require_configuration()
+
+        async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            assignee = assignee_ref.removeprefix("@")
+            if assignee_ref.casefold() == "@me":
+                response = await client.get("https://api.github.com/user", headers=self._rest_headers())
+                response.raise_for_status()
+                assignee = response.json()["login"]
+            response = await client.post(
+                f"https://api.github.com/repos/{self.owner}/{self.repository}/issues/{item.id}/assignees",
+                headers=self._rest_headers(),
+                json={"assignees": [assignee]},
+            )
+            response.raise_for_status()
+
+        return await self.get_item_status(item)
+
     async def discover_items(
         self,
         label_ref: str | None = None,

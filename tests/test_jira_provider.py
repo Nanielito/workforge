@@ -345,6 +345,26 @@ def test_move_item_resolves_alias_to_transition_destination() -> None:
     assert status.id == "WF-12"
 
 
+def test_claim_item_assigns_authenticated_user() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/rest/api/3/myself":
+            return httpx.Response(200, json={"accountId": "account-1"})
+        if request.url.path.endswith("/assignee"):
+            assert json.loads(request.content) == {"accountId": "account-1"}
+            return httpx.Response(204)
+        return httpx.Response(200, json=_jira_issue())
+
+    provider = JiraProvider(
+        {"site_url": "https://example.atlassian.net", "project_key": "WF", "issue_type": "Task"},
+        {"JIRA_EMAIL": "user@example.com", "JIRA_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(provider.claim_item(CreatedItem(provider="jira", id="WF-12", title="Claim me")))
+
+    assert status.id == "WF-12"
+
+
 def test_resolve_transition_reports_available_options() -> None:
     provider = JiraProvider({"status": {"values": {"review": "In Review"}}}, {})
 

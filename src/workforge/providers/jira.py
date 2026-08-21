@@ -240,6 +240,32 @@ class JiraProvider(PlanningProvider):
 
         return await self.get_item_status(item)
 
+    async def claim_item(self, item: CreatedItem, assignee_ref: str = "@me") -> ItemStatus:
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.site_url,
+                auth=(self.email, self.api_token),
+                timeout=20,
+                transport=self.transport,
+            ) as client:
+                account_id = assignee_ref
+                if assignee_ref.casefold() == "@me":
+                    response = await client.get("/rest/api/3/myself")
+                    response.raise_for_status()
+                    account_id = response.json()["accountId"]
+                response = await client.put(
+                    f"/rest/api/3/issue/{item.id}/assignee",
+                    json={"accountId": account_id},
+                )
+                response.raise_for_status()
+        except (httpx.HTTPError, ValueError, KeyError) as error:
+            raise RuntimeError(f"Jira request failed: {self._safe_message(error)}") from error
+
+        return await self.get_item_status(item)
+
     def _resolve_transition(self, transitions: list[dict[str, Any]], status_ref: str) -> dict[str, Any]:
         values = self.status.get("values", {}) if isinstance(self.status, dict) else {}
         target = values.get(status_ref, status_ref) if isinstance(values, dict) else status_ref
