@@ -118,6 +118,12 @@ GitHub discovery can also filter by assignee and configured Project status:
 workforge discover --workspace workspaces/github-projects-example --provider github --assignee @me --status todo --save
 ```
 
+Trello uses the same options for board members and configured logical lists:
+
+```bash
+workforge discover --workspace workspaces/trello-example --provider trello --assignee @me --status doing --save
+```
+
 Check provider item status from saved `items.json`:
 
 ```bash
