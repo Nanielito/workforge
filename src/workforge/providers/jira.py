@@ -19,6 +19,8 @@ class JiraProvider(PlanningProvider):
         self.site_url = config.get("site_url", "").rstrip("/")
         self.project_key = config.get("project_key", "")
         self.issue_type = config.get("issue_type", "")
+        self.labels = config.get("labels", {})
+        self.versions = config.get("versions", {})
         self.email = env.get("JIRA_EMAIL", "")
         self.api_token = env.get("JIRA_API_TOKEN", "")
         self.transport = transport
@@ -77,7 +79,49 @@ class JiraProvider(PlanningProvider):
         return message
 
     async def create_requirement(self, requirement: Requirement) -> CreatedItem:
-        raise NotImplementedError("Jira issue creation is not implemented yet.")
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+
+        fields: dict[str, Any] = {
+            "project": {"key": self.project_key},
+            "issuetype": {"name": self.issue_type},
+            "summary": requirement.title,
+            "description": _adf_document(requirement),
+            "labels": self._label_names_for(requirement.labels),
+        }
+        if requirement.milestone:
+            fields["fixVersions"] = [{"id": self._version_id_for(requirement.milestone)}]
+
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.site_url,
+                auth=(self.email, self.api_token),
+                timeout=20,
+                transport=self.transport,
+            ) as client:
+                response = await client.post("/rest/api/3/issue", json={"fields": fields})
+                response.raise_for_status()
+                issue = response.json()
+        except (httpx.HTTPError, ValueError) as error:
+            raise RuntimeError(f"Jira request failed: {self._safe_message(error)}") from error
+
+        return CreatedItem(
+            provider=self.name,
+            id=issue["key"],
+            url=f"{self.site_url}/browse/{issue['key']}",
+            title=requirement.title,
+        )
+
+    def _label_names_for(self, logical_names: list[str]) -> list[str]:
+        if not isinstance(self.labels, dict):
+            return []
+        return [label for name in logical_names if isinstance(label := self.labels.get(name), str) and label]
+
+    def _version_id_for(self, logical_name: str) -> str:
+        version_id = self.versions.get(logical_name) if isinstance(self.versions, dict) else None
+        if isinstance(version_id, bool) or not isinstance(version_id, (str, int)) or not str(version_id):
+            raise ValueError(f"Jira version is not configured: {logical_name}")
+        return str(version_id)
 
     async def get_item_status(self, item: CreatedItem) -> ItemStatus:
         raise NotImplementedError("Jira status reading is not implemented yet.")
@@ -98,3 +142,31 @@ class JiraProvider(PlanningProvider):
         status_ref: str | None = None,
     ) -> list[CreatedItem]:
         raise NotImplementedError("Jira discovery is not implemented yet.")
+
+
+def _adf_document(requirement: Requirement) -> dict[str, Any]:
+    content: list[dict[str, Any]] = []
+    if requirement.description:
+        content.append({"type": "paragraph", "content": [{"type": "text", "text": requirement.description}]})
+    if requirement.tasks:
+        content.extend(
+            [
+                {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Tasks"}]},
+                {
+                    "type": "taskList",
+                    "attrs": {"localId": "workforge-tasks"},
+                    "content": [
+                        {
+                            "type": "taskItem",
+                            "attrs": {
+                                "localId": f"workforge-task-{index}",
+                                "state": "DONE" if task.done else "TODO",
+                            },
+                            "content": [{"type": "text", "text": task.title}],
+                        }
+                        for index, task in enumerate(requirement.tasks, start=1)
+                    ],
+                },
+            ]
+        )
+    return {"type": "doc", "version": 1, "content": content}
