@@ -112,6 +112,12 @@ Discover existing provider items by label and rebuild `items.json`:
 workforge discover workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --provider trello --label shopify --save
 ```
 
+GitHub discovery can also filter by assignee and configured Project status:
+
+```bash
+workforge discover --workspace workspaces/github-projects-example --provider github --assignee @me --status todo --save
+```
+
 Check provider item status from saved `items.json`:
 
 ```bash

@@ -347,6 +347,7 @@ def test_move_item_updates_project_status_from_configured_alias() -> None:
 def test_discover_items_paginates_and_filters_repository_state_and_label() -> None:
     def issue(number: int, repository: str = "owner/workforge", state: str = "OPEN") -> dict[str, object]:
         return {
+            "fieldValues": {"nodes": []},
             "content": {
                 "number": number,
                 "title": f"Issue {number}",
@@ -354,6 +355,7 @@ def test_discover_items_paginates_and_filters_repository_state_and_label() -> No
                 "state": state,
                 "repository": {"nameWithOwner": repository},
                 "labels": {"nodes": [{"id": "label-node", "name": "enhancement"}]},
+                "assignees": {"nodes": []},
             }
         }
 
@@ -370,6 +372,7 @@ def test_discover_items_paginates_and_filters_repository_state_and_label() -> No
             200,
             json={
                 "data": {
+                    "viewer": {"login": "owner"},
                     "user": {
                         "projectV2": {
                             "items": {"nodes": nodes, "pageInfo": page_info}
@@ -393,6 +396,61 @@ def test_discover_items_paginates_and_filters_repository_state_and_label() -> No
     items = asyncio.run(provider.discover_items("feature"))
 
     assert [item.id for item in items] == ["1", "3"]
+
+
+def test_discover_items_filters_assignee_and_project_status_alias() -> None:
+    def item(number: int, assignee: str, status: str) -> dict[str, object]:
+        return {
+            "fieldValues": {
+                "nodes": [{"name": status, "field": {"name": "Status"}}]
+            },
+            "content": {
+                "number": number,
+                "title": f"Issue {number}",
+                "url": f"https://github.com/owner/workforge/issues/{number}",
+                "state": "OPEN",
+                "repository": {"nameWithOwner": "owner/workforge"},
+                "labels": {"nodes": []},
+                "assignees": {"nodes": [{"id": f"user-{number}", "login": assignee}]},
+            },
+        }
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "viewer": {"login": "owner"},
+                    "user": {
+                        "projectV2": {
+                            "items": {
+                                "nodes": [
+                                    item(1, "owner", "Todo"),
+                                    item(2, "someone-else", "Todo"),
+                                    item(3, "owner", "Done"),
+                                ],
+                                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            }
+                        }
+                    },
+                }
+            },
+        )
+
+    provider = GitHubProvider(
+        {
+            "owner": "owner",
+            "repository": "workforge",
+            "project_number": 1,
+            "status": {"field": "Status", "values": {"todo": "Todo"}},
+        },
+        {"GITHUB_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    items = asyncio.run(provider.discover_items(assignee_ref="@me", status_ref="todo"))
+
+    assert [item.id for item in items] == ["1"]
 
 
 def test_comment_item_adds_issue_comment_and_returns_status() -> None:
