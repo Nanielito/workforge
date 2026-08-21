@@ -84,6 +84,40 @@ class TrelloProvider(PlanningProvider):
             tasks=tasks,
         )
 
+    async def update_requirement_tasks(self, item: CreatedItem, requirement: Requirement) -> ItemStatus:
+        check = await self.check()
+        if not check.ok:
+            raise RuntimeError(check.message)
+
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20, transport=self.transport) as client:
+            card = await self._get_card(client, item.id)
+            checklists = await self._get_card_checklists(client, item.id)
+            managed = [checklist for checklist in checklists if checklist.get("name") == "Tasks"]
+            completed: dict[str, list[bool]] = {}
+            for task in _task_statuses_from_checklists(managed):
+                completed.setdefault(task.title.casefold(), []).append(task.done)
+            updated_checklists = [checklist for checklist in checklists if checklist not in managed]
+            if requirement.tasks:
+                checklist = await self._create_checklist(client, item.id)
+                for task in requirement.tasks:
+                    created = await self._create_check_item(client, checklist["id"], task.title)
+                    states = completed.get(task.title.casefold(), [])
+                    if states.pop(0) if states else task.done:
+                        await self._update_check_item_state(client, item.id, created["id"], "complete")
+            for checklist in managed:
+                await self._delete_checklist(client, checklist["id"])
+            if requirement.tasks:
+                updated_checklists = await self._get_card_checklists(client, item.id)
+
+        return ItemStatus(
+            provider=self.name,
+            id=card["id"],
+            url=card.get("shortUrl") or card.get("url") or item.url,
+            title=card.get("name") or item.title,
+            closed=bool(card.get("closed")),
+            tasks=_task_statuses_from_checklists(updated_checklists),
+        )
+
     async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
         check = await self.check()
         if not check.ok:
@@ -245,6 +279,10 @@ class TrelloProvider(PlanningProvider):
         )
         response.raise_for_status()
         return response.json()
+
+    async def _delete_checklist(self, client: httpx.AsyncClient, checklist_id: str) -> None:
+        response = await client.delete(f"/checklists/{checklist_id}", params=self._auth_params())
+        response.raise_for_status()
 
     async def _get_card(self, client: httpx.AsyncClient, card_id: str) -> dict[str, Any]:
         response = await client.get(

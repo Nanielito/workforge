@@ -268,6 +268,18 @@ class GitHubProvider(PlanningProvider):
 
         return self._item_status_from_issue(issue, item)
 
+    async def update_requirement_tasks(self, item: CreatedItem, requirement: Requirement) -> ItemStatus:
+        self._require_configuration()
+
+        async with httpx.AsyncClient(timeout=20, transport=self.transport) as client:
+            issue = await self._get_issue(client, item.id)
+            body = issue.get("body") or ""
+            updated_body = _sync_tasks_in_issue_body(body, requirement)
+            if updated_body != body:
+                issue = await self._update_issue_body(client, item.id, updated_body)
+
+        return self._item_status_from_issue(issue, item)
+
     async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
         self._require_configuration()
 
@@ -567,3 +579,28 @@ def _complete_task_in_issue_body(body: str, task_ref: str) -> str:
     lines = body.splitlines(keepends=True)
     lines[line_index] = lines[line_index].replace("- [ ]", "- [x]", 1)
     return "".join(lines)
+
+
+def _sync_tasks_in_issue_body(body: str, requirement: Requirement) -> str:
+    lines = body.splitlines()
+    start = next((index for index, line in enumerate(lines) if line.strip() == "## Tasks"), None)
+    after_start = (start if start is not None else -1) + 1
+    end = next((index for index in range(after_start, len(lines)) if lines[index].startswith("## ")), len(lines))
+    completed: dict[str, list[bool]] = {}
+    for _, title, done, _ in _task_entries(body):
+        completed.setdefault(title.casefold(), []).append(done)
+
+    task_lines = []
+    for task in requirement.tasks:
+        states = completed.get(task.title.casefold(), [])
+        done = states.pop(0) if states else task.done
+        task_lines.append(f"- [{'x' if done else ' '}] {task.title}")
+    section = ["## Tasks", "", *task_lines, *([""] if end < len(lines) else [])] if task_lines else []
+
+    if start is None:
+        updated = [*lines, *([""] if lines and task_lines else []), *section]
+    else:
+        updated = [*lines[:start], *section, *lines[end:]]
+    while updated and not updated[-1]:
+        updated.pop()
+    return "\n".join(updated) + ("\n" if updated and body.endswith("\n") else "")

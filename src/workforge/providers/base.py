@@ -15,6 +15,10 @@ class PlanningProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def update_requirement_tasks(self, item: CreatedItem, requirement: Requirement) -> ItemStatus:
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_item_status(self, item: CreatedItem) -> ItemStatus:
         raise NotImplementedError
 

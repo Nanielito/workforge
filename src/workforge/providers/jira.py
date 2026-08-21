@@ -149,6 +149,29 @@ class JiraProvider(PlanningProvider):
 
         return self._item_status_from_issue(issue, item)
 
+    async def update_requirement_tasks(self, item: CreatedItem, requirement: Requirement) -> ItemStatus:
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.site_url,
+                auth=(self.email, self.api_token),
+                timeout=20,
+                transport=self.transport,
+            ) as client:
+                issue = await self._get_issue(client, item.id)
+                description = issue.get("fields", {}).get("description") or _empty_adf_document()
+                updated = _sync_adf_tasks(description, requirement)
+                if updated != description:
+                    response = await client.put(f"/rest/api/3/issue/{item.id}", json={"fields": {"description": updated}})
+                    response.raise_for_status()
+                    issue["fields"]["description"] = updated
+        except (httpx.HTTPError, ValueError) as error:
+            raise RuntimeError(f"Jira request failed: {self._safe_message(error)}") from error
+
+        return self._item_status_from_issue(issue, item)
+
     async def complete_task(self, item: CreatedItem, task_ref: str) -> ItemStatus:
         if error := self._configuration_error():
             raise RuntimeError(error)
@@ -412,6 +435,58 @@ def _task_statuses_from_adf(description: dict[str, Any] | None) -> list[TaskStat
         )
         for task in _managed_adf_tasks(description)
     ]
+
+
+def _sync_adf_tasks(description: dict[str, Any], requirement: Requirement) -> dict[str, Any]:
+    content = description.get("content", [])
+    list_index = next(
+        (
+            index
+            for index, node in enumerate(content)
+            if node.get("type") == "taskList" and node.get("attrs", {}).get("localId") == "workforge-tasks"
+        ),
+        None,
+    )
+    completed: dict[str, list[bool]] = {}
+    for task in _managed_adf_tasks(description):
+        completed.setdefault(_task_title(task).casefold(), []).append(task.get("attrs", {}).get("state") == "DONE")
+
+    tasks = []
+    for index, task in enumerate(requirement.tasks, start=1):
+        states = completed.get(task.title.casefold(), [])
+        done = states.pop(0) if states else task.done
+        tasks.append(
+            {
+                "type": "taskItem",
+                "attrs": {"localId": f"workforge-task-{index}", "state": "DONE" if done else "TODO"},
+                "content": [{"type": "text", "text": task.title}],
+            }
+        )
+
+    updated_content = list(content)
+    if list_index is not None:
+        if tasks:
+            updated_content[list_index] = {
+                "type": "taskList",
+                "attrs": {"localId": "workforge-tasks"},
+                "content": tasks,
+            }
+        else:
+            updated_content.pop(list_index)
+            if list_index and _is_tasks_heading(updated_content[list_index - 1]):
+                updated_content.pop(list_index - 1)
+    elif tasks:
+        updated_content.extend(
+            [
+                {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Tasks"}]},
+                {"type": "taskList", "attrs": {"localId": "workforge-tasks"}, "content": tasks},
+            ]
+        )
+    return {**description, "content": updated_content}
+
+
+def _is_tasks_heading(node: dict[str, Any]) -> bool:
+    return node.get("type") == "heading" and _task_title(node) == "Tasks"
 
 
 def _find_adf_task(description: dict[str, Any], task_ref: str) -> dict[str, Any]:
