@@ -1,3 +1,9 @@
+## [2.1.0] - 2026-08-21
+
+### 🚀 Features
+
+- Filter GitHub discovery by assignee and status
+- Filter Trello discovery by member and list
 ## [2.0.0] - 2026-08-20
 
 ### 🚀 Features
@@ -26,6 +32,10 @@
 - Document GitHub Projects provider
 - Add GitHub Projects example workspace
 - Add v2 migration guide
+
+### ⚙️ Miscellaneous Tasks
+
+- Release 2.0.0
 ## [1.0.0] - 2026-08-05
 
 ### 🚀 Features
