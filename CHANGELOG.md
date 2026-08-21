@@ -1,3 +1,8 @@
+## [2.3.0] - 2026-08-21
+
+### 🚀 Features
+
+- *(cli)* Claim existing provider items
 ## [2.2.0] - 2026-08-21
 
 ### 🚀 Features
@@ -12,6 +17,10 @@
 ### 📚 Documentation
 
 - Add project agent guidelines
+
+### ⚙️ Miscellaneous Tasks
+
+- Release 2.2.0
 ## [2.1.0] - 2026-08-21
 
 ### 🚀 Features
