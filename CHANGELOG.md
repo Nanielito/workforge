@@ -1,9 +1,27 @@
+## [2.2.0] - 2026-08-21
+
+### 🚀 Features
+
+- *(jira)* Add provider connectivity
+- *(jira)* Create issues from requirements
+- *(jira)* Track and complete issue tasks
+- *(jira)* Comment on and transition issues
+- *(jira)* Discover issues with JQL filters
+- *(jira)* Harden provider for release
+
+### 📚 Documentation
+
+- Add project agent guidelines
 ## [2.1.0] - 2026-08-21
 
 ### 🚀 Features
 
 - Filter GitHub discovery by assignee and status
 - Filter Trello discovery by member and list
+
+### ⚙️ Miscellaneous Tasks
+
+- Release 2.1.0
 ## [2.0.0] - 2026-08-20
 
 ### 🚀 Features
