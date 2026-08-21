@@ -1,8 +1,22 @@
+## [2.4.0] - 2026-08-21
+
+### 🚀 Features
+
+- *(cli)* Synchronize requirement task lists
+
+### 📚 Documentation
+
+- Complete provider design documentation
+- Define tracked issue workflow
 ## [2.3.0] - 2026-08-21
 
 ### 🚀 Features
 
 - *(cli)* Claim existing provider items
+
+### ⚙️ Miscellaneous Tasks
+
+- Release 2.3.0
 ## [2.2.0] - 2026-08-21
 
 ### 🚀 Features
