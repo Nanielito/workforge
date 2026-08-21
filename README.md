@@ -485,3 +485,7 @@ To list labels for a board:
 ```bash
 curl "https://api.trello.com/1/boards/TRELLO_BOARD_ID/labels?fields=id,name,color&key=$TRELLO_API_KEY&token=$TRELLO_API_TOKEN"
 ```
+
+## License
+
+WorkForge is available under the [MIT License](https://github.com/Nanielito/workforge/blob/main/LICENSE).
