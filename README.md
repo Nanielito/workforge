@@ -67,18 +67,23 @@ GitHub Actions runs on pull requests and pushes to `main`.
 
 ## Quick Start
 
-Install WorkForge as an isolated command-line tool:
+Run WorkForge on demand without installing a permanent command:
 
 ```bash
-uv tool install workforge
+uvx workforge --help
 ```
 
-Contributors should continue to use `pip install -e ".[dev]"`.
+Prefix each WorkForge command with `uvx`; the examples below omit that prefix
+for readability. Alternatively, install it persistently with
+`uv tool install workforge`. See the
+[distribution guide](https://github.com/Nanielito/workforge/blob/main/docs/distribution.md#choose-how-to-run-workforge)
+for temporary, persistent, and version-pinned usage. Contributors should
+continue to use `pip install -e ".[dev]"`.
 
 Create a project-local workspace:
 
 ```bash
-workforge init .workforge --name linkealo --provider trello --namespace linkealo/shopify
+workforge init .workforge --name my-project --provider trello --namespace my-project/shopify
 ```
 
 Then add the printed entries to the host project's `.gitignore`:
@@ -344,7 +349,7 @@ workspaces/<name>/
       status.json
       agent-context.md
       items/
-        fix-ui-operativa-post-instalacion.md
+        fix-ui-post-install.md
 ```
 
 `preview.json` contains the provider-neutral requirements parsed from the input.
