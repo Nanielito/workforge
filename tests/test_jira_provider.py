@@ -249,3 +249,85 @@ def test_complete_task_updates_only_selected_managed_task() -> None:
     )
 
     assert status.completed_tasks == 2
+
+
+def _jira_issue(status_key: str = "indeterminate") -> dict:
+    return {
+        "key": "WF-12",
+        "fields": {
+            "summary": "Jira item",
+            "status": {"statusCategory": {"key": status_key}},
+            "description": _issue_description(),
+        },
+    }
+
+
+def test_comment_item_adds_adf_comment() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/comment"):
+            assert json.loads(request.content) == {
+                "body": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Ready for review"}]}],
+                }
+            }
+            return httpx.Response(201, json={"id": "10001"})
+        return httpx.Response(200, json=_jira_issue())
+
+    provider = JiraProvider(
+        {"site_url": "https://example.atlassian.net", "project_key": "WF", "issue_type": "Task"},
+        {"JIRA_EMAIL": "user@example.com", "JIRA_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(
+        provider.comment_item(CreatedItem(provider="jira", id="WF-12", title="Fallback"), "Ready for review")
+    )
+
+    assert status.id == "WF-12"
+    with pytest.raises(ValueError, match="Comment text cannot be empty"):
+        asyncio.run(provider.comment_item(CreatedItem(provider="jira", id="WF-12", title="Fallback"), " "))
+
+
+def test_move_item_resolves_alias_to_transition_destination() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/transitions") and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "transitions": [
+                        {"id": "21", "name": "Start Progress", "to": {"name": "In Progress"}},
+                        {"id": "31", "name": "Finish", "to": {"name": "Done"}},
+                    ]
+                },
+            )
+        if request.url.path.endswith("/transitions"):
+            assert json.loads(request.content) == {"transition": {"id": "21"}}
+            return httpx.Response(204)
+        return httpx.Response(200, json=_jira_issue())
+
+    provider = JiraProvider(
+        {
+            "site_url": "https://example.atlassian.net",
+            "project_key": "WF",
+            "issue_type": "Task",
+            "status": {"values": {"doing": "In Progress"}},
+        },
+        {"JIRA_EMAIL": "user@example.com", "JIRA_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(provider.move_item(CreatedItem(provider="jira", id="WF-12", title="Fallback"), "doing"))
+
+    assert status.id == "WF-12"
+
+
+def test_resolve_transition_reports_available_options() -> None:
+    provider = JiraProvider({"status": {"values": {"review": "In Review"}}}, {})
+
+    with pytest.raises(ValueError, match=r"not available.*21 \(Start Progress → In Progress\)"):
+        provider._resolve_transition(
+            [{"id": "21", "name": "Start Progress", "to": {"name": "In Progress"}}],
+            "review",
+        )
