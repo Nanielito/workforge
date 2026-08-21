@@ -1,0 +1,23 @@
+name: jira-example
+default_provider: jira
+
+providers:
+  jira:
+    site_url: https://replace-with-site.atlassian.net
+    project_key: WF
+    issue_type: Task
+    labels:
+      feature: enhancement
+    versions:
+      v1: "10000"
+    status:
+      values:
+        todo: To Do
+        doing: In Progress
+        review: In Review
+        done: Done
+
+defaults:
+  source: example
+  namespace: examples/jira
+  dry_run: true

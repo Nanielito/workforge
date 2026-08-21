@@ -1,10 +1,10 @@
 # WorkForge
 
 WorkForge turns raw work inputs into structured planning items, then sends them
-to planning providers such as Trello and GitHub Projects.
+to planning providers such as Trello, GitHub Projects, and Jira Cloud.
 
 The core model is provider-neutral so the same requirements can become Trello
-cards or GitHub Issues attached to a Project v2.
+cards, GitHub Issues attached to a Project v2, or Jira issues.
 
 ## Goals
 
@@ -124,6 +124,13 @@ Trello uses the same options for board members and configured logical lists:
 workforge discover --workspace workspaces/trello-example --provider trello --assignee @me --status doing --save
 ```
 
+Jira uses JQL and accepts logical labels, account IDs or `@me`, and configured
+workflow statuses:
+
+```bash
+workforge discover --workspace workspaces/jira-example --provider jira --assignee @me --status doing --save
+```
+
 Check provider item status from saved `items.json`:
 
 ```bash
@@ -214,6 +221,7 @@ Shared example workspaces live inside this repository:
 ```txt
 workspaces/trello-example/
 workspaces/github-projects-example/
+workspaces/jira-example/
 ```
 
 Project-local workspaces live inside the repository that the agent will modify:
@@ -230,6 +238,52 @@ some-project/
 Project-local workspaces are recommended when generating agent context for an
 implementation task because `agent-context.md`, `status.json`, and `items.json`
 stay close to the code being changed.
+
+## Jira Cloud
+
+Create an Atlassian API token and keep the credentials in the selected
+workspace's `.env`:
+
+```dotenv
+JIRA_EMAIL=you@example.com
+JIRA_API_TOKEN=
+```
+
+Configure one Jira Cloud project:
+
+```yaml
+providers:
+  jira:
+    site_url: https://example.atlassian.net
+    project_key: WF
+    issue_type: Task
+    labels:
+      feature: enhancement
+    versions:
+      v1: "10000"
+    status:
+      values:
+        todo: To Do
+        doing: In Progress
+        review: In Review
+        done: Done
+```
+
+`labels`, `versions`, and status names reference resources that already exist
+in Jira. WorkForge does not create or administer Jira projects, boards,
+workflows, versions, or labels.
+
+Validate access before creating issues:
+
+```bash
+workforge providers test --workspace workspaces/jira-example --provider jira
+workforge preview workspaces/jira-example/inbox/sample-requirements.md --workspace workspaces/jira-example
+```
+
+Use the same provider-neutral `create`, `status`, `complete-task`,
+`comment-item`, `move-item`, and `discover` commands shown above. Jira stores
+descriptions, comments, and managed tasks as Atlassian Document Format and
+changes statuses through transitions available from the issue's current state.
 
 ## Input Format
 
