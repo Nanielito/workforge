@@ -258,7 +258,61 @@ class JiraProvider(PlanningProvider):
         assignee_ref: str | None = None,
         status_ref: str | None = None,
     ) -> list[CreatedItem]:
-        raise NotImplementedError("Jira discovery is not implemented yet.")
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+
+        jql = self._discovery_jql(label_ref, assignee_ref, status_ref)
+        discovered: list[CreatedItem] = []
+        next_page_token: str | None = None
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.site_url,
+                auth=(self.email, self.api_token),
+                timeout=20,
+                transport=self.transport,
+            ) as client:
+                while True:
+                    body: dict[str, Any] = {"jql": jql, "fields": ["summary"], "maxResults": 100}
+                    if next_page_token:
+                        body["nextPageToken"] = next_page_token
+                    response = await client.post("/rest/api/3/search/jql", json=body)
+                    response.raise_for_status()
+                    page = response.json()
+                    discovered.extend(
+                        CreatedItem(
+                            provider=self.name,
+                            id=issue["key"],
+                            url=f"{self.site_url}/browse/{issue['key']}",
+                            title=issue.get("fields", {}).get("summary") or issue["key"],
+                        )
+                        for issue in page.get("issues", [])
+                    )
+                    next_page_token = page.get("nextPageToken")
+                    if not next_page_token:
+                        break
+        except (httpx.HTTPError, ValueError) as error:
+            raise RuntimeError(f"Jira request failed: {self._safe_message(error)}") from error
+
+        return discovered
+
+    def _discovery_jql(
+        self,
+        label_ref: str | None,
+        assignee_ref: str | None,
+        status_ref: str | None,
+    ) -> str:
+        clauses = [f'project = {_jql_quote(self.project_key)}', 'statusCategory != "Done"']
+        if label_ref:
+            label = self.labels.get(label_ref, label_ref) if isinstance(self.labels, dict) else label_ref
+            clauses.append(f"labels = {_jql_quote(str(label))}")
+        if assignee_ref:
+            assignee = "currentUser()" if assignee_ref.casefold() == "@me" else _jql_quote(assignee_ref)
+            clauses.append(f"assignee = {assignee}")
+        if status_ref:
+            values = self.status.get("values", {}) if isinstance(self.status, dict) else {}
+            status = values.get(status_ref, status_ref) if isinstance(values, dict) else status_ref
+            clauses.append(f"status = {_jql_quote(str(status))}")
+        return " AND ".join(clauses) + " ORDER BY created ASC"
 
 
 def _adf_document(requirement: Requirement) -> dict[str, Any]:
@@ -295,6 +349,11 @@ def _empty_adf_document() -> dict[str, Any]:
 
 def _paragraph_adf(text: str) -> dict[str, Any]:
     return {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": text}]}]}
+
+
+def _jql_quote(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def _managed_adf_tasks(description: dict[str, Any] | None) -> list[dict[str, Any]]:
