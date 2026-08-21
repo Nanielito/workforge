@@ -1,3 +1,18 @@
+## [2.4.1] - 2026-08-21
+
+### 💼 Other
+
+- Publish releases to PyPI
+
+### 📚 Documentation
+
+- Document public distribution workflow
+- License WorkForge under MIT
+
+### ⚙️ Miscellaneous Tasks
+
+- *(github pages)* Create theme configuration file
+- Updates documentation
 ## [2.4.0] - 2026-08-21
 
 ### 🚀 Features
@@ -8,6 +23,10 @@
 
 - Complete provider design documentation
 - Define tracked issue workflow
+
+### ⚙️ Miscellaneous Tasks
+
+- Release 2.4.0
 ## [2.3.0] - 2026-08-21
 
 ### 🚀 Features
