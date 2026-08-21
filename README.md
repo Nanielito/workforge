@@ -67,15 +67,7 @@ GitHub Actions runs on pull requests and pushes to `main`.
 
 ## Quick Start
 
-Until WorkForge is published on PyPI, install it from a local checkout:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-After PyPI publishing is enabled, the recommended user installation will be:
+Install WorkForge as an isolated command-line tool:
 
 ```bash
 uv tool install workforge
