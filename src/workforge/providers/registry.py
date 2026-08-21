@@ -2,6 +2,7 @@ from typing import Any
 
 from workforge.providers.base import PlanningProvider
 from workforge.providers.github import GitHubProvider
+from workforge.providers.jira import JiraProvider
 from workforge.providers.trello import TrelloProvider
 
 
@@ -10,5 +11,7 @@ def build_provider(name: str, config: dict[str, Any], env: dict[str, str] | None
         return TrelloProvider(config, env or {})
     if name == "github":
         return GitHubProvider(config, env or {})
+    if name == "jira":
+        return JiraProvider(config, env or {})
 
     raise ValueError(f"Unknown provider: {name}")
