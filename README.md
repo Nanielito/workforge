@@ -29,12 +29,10 @@ change saved output and CLI command names.
 Releases are created manually from the `Release` GitHub Actions workflow on
 `main`. The workflow updates the version and changelog, runs the test suite,
 builds and validates the wheel and source distribution, creates the Git tag,
-and attaches both distributions to a GitHub Release. To create the first stable
-release after `v1.0.0`, run it with the `major` bump to create `v2.0.0`.
+and attaches both distributions to a GitHub Release.
 
-GitHub Packages does not provide a Python package index. The GitHub Release is
-therefore the initial distribution channel; publishing to PyPI or a private
-Python index can be added later if installation through `pip` is required.
+See the [distribution and release guide](docs/distribution.md) for the current
+release process and the planned public PyPI distribution workflow.
 
 ### Migrating from v1 to v2
 
@@ -69,11 +67,21 @@ GitHub Actions runs on pull requests and pushes to `main`.
 
 ## Quick Start
 
+Until WorkForge is published on PyPI, install it from a local checkout:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e .
 ```
+
+After PyPI publishing is enabled, the recommended user installation will be:
+
+```bash
+uv tool install workforge
+```
+
+Contributors should continue to use `pip install -e ".[dev]"`.
 
 Create a project-local workspace:
 
