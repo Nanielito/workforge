@@ -331,3 +331,59 @@ def test_resolve_transition_reports_available_options() -> None:
             [{"id": "21", "name": "Start Progress", "to": {"name": "In Progress"}}],
             "review",
         )
+
+
+def test_discover_items_paginates_and_combines_filters() -> None:
+    requests: list[dict] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        requests.append(body)
+        if "nextPageToken" not in body:
+            return httpx.Response(
+                200,
+                json={
+                    "issues": [{"key": "WF-1", "fields": {"summary": "First"}}],
+                    "nextPageToken": "next-token",
+                },
+            )
+        return httpx.Response(200, json={"issues": [{"key": "WF-2", "fields": {"summary": "Second"}}]})
+
+    provider = JiraProvider(
+        {
+            "site_url": "https://example.atlassian.net",
+            "project_key": "WF",
+            "issue_type": "Task",
+            "labels": {"feature": "enhancement"},
+            "status": {"values": {"doing": "In Progress"}},
+        },
+        {"JIRA_EMAIL": "user@example.com", "JIRA_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    items = asyncio.run(provider.discover_items("feature", "@me", "doing"))
+
+    assert [item.id for item in items] == ["WF-1", "WF-2"]
+    assert requests == [
+        {
+            "jql": 'project = "WF" AND statusCategory != "Done" AND labels = "enhancement" AND assignee = currentUser() AND status = "In Progress" ORDER BY created ASC',
+            "fields": ["summary"],
+            "maxResults": 100,
+        },
+        {
+            "jql": 'project = "WF" AND statusCategory != "Done" AND labels = "enhancement" AND assignee = currentUser() AND status = "In Progress" ORDER BY created ASC',
+            "fields": ["summary"],
+            "maxResults": 100,
+            "nextPageToken": "next-token",
+        },
+    ]
+
+
+def test_discovery_jql_preserves_unfiltered_search_and_escapes_account_id() -> None:
+    provider = JiraProvider(
+        {"project_key": 'W"F'},
+        {},
+    )
+
+    assert provider._discovery_jql(None, None, None) == 'project = "W\\"F" AND statusCategory != "Done" ORDER BY created ASC'
+    assert 'assignee = "account\\"id"' in provider._discovery_jql(None, 'account"id', None)
