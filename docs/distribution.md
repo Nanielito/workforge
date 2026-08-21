@@ -1,9 +1,8 @@
 # Distribution and Release Guide
 
-WorkForge is a public Python CLI. GitHub remains the source repository and
-release record; PyPI will be the package distribution channel. This gives users
-an isolated `workforge` command without requiring a repository clone or a
-development environment.
+WorkForge is a public Python CLI distributed through PyPI. GitHub remains the
+source repository and release record. Users can run WorkForge in an isolated
+environment without cloning the repository or creating a development setup.
 
 ## Current state
 
@@ -12,23 +11,51 @@ changelog, creates a Git tag, and uploads the wheel and source distribution to
 both a GitHub Release and PyPI. The PyPI job uses Trusted Publishing and a
 separate GitHub environment so it never receives the repository write token.
 
-PyPI installation commands will work after the one-time publisher setup is
-completed and the first release using the publish job succeeds.
+## Choose how to run WorkForge
 
-## User installation
+### On demand in a project
 
-The recommended installation uses `uv`, which puts the CLI and its dependencies
-in an isolated environment:
+Use `uvx` when WorkForge supports planning for a project but should not become a
+permanent command or project dependency:
+
+```bash
+cd my-project
+uvx workforge init .workforge \
+  --name my-project \
+  --provider github \
+  --namespace organization/repository
+uvx workforge preview .workforge/inbox/requirements.md --workspace .workforge
+```
+
+Prefix every command with `uvx`. The WorkForge runtime remains isolated and uv
+may cache it for faster later executions; the project-local `.workforge`
+workspace persists normally. The same approach works with Trello, GitHub
+Projects, and Jira.
+
+To reproduce planning behavior with a known release, pin it in each invocation:
+
+```bash
+uvx workforge@X.Y.Z preview .workforge/inbox/requirements.md --workspace .workforge
+```
+
+There is nothing to uninstall after `uvx`. `uv cache clean` removes uv's shared
+cache, not only WorkForge, and is normally unnecessary.
+
+### Persistent command
+
+Install WorkForge persistently when it is used across many projects or by
+scripts that expect a `workforge` command on `PATH`:
 
 ```bash
 uv tool install workforge
 workforge --help
 ```
 
-Users can run WorkForge without a permanent installation:
+Upgrade or remove this installation with:
 
 ```bash
-uvx workforge --help
+uv tool upgrade workforge
+uv tool uninstall workforge
 ```
 
 `pipx` provides an equivalent isolated installation:
@@ -40,17 +67,10 @@ pipx install workforge
 Plain `pip install workforge` is supported but is not the recommended default
 because it can mix WorkForge dependencies with another Python environment.
 
-Install or keep a specific version when reproducibility matters:
+Pin a persistent installation when reproducibility matters:
 
 ```bash
-uv tool install workforge==2.4.1
-```
-
-Upgrade or remove the CLI with:
-
-```bash
-uv tool upgrade workforge
-uv tool uninstall workforge
+uv tool install workforge==X.Y.Z
 ```
 
 ## First use
