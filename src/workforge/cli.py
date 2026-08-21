@@ -10,7 +10,7 @@ import yaml
 
 from workforge.config import WorkspaceRuntime, load_workspace
 from workforge.core.parser import parse_markdown_requirements
-from workforge.models import CreatedItem, ItemStatus
+from workforge.models import CreatedItem, ItemStatus, Requirement
 from workforge.providers.registry import build_provider
 
 app = typer.Typer(no_args_is_help=True)
@@ -65,6 +65,17 @@ def create(
     save: bool = typer.Option(False, "--save", help="Save output under workspace output/<input-name>/."),
 ) -> None:
     asyncio.run(_create(input_file, workspace, provider, dry_run, execute, save))
+
+
+@app.command()
+def update(
+    input_file: Path,
+    workspace: Path = typer.Option(..., "--workspace", "-w"),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    execute: bool = typer.Option(False, "--execute", help="Update task lists in the external provider."),
+    save: bool = typer.Option(True, "--save/--no-save", help="Refresh status.json and agent-context.md after updating."),
+) -> None:
+    asyncio.run(_update(input_file, workspace, provider, execute, save))
 
 
 @app.command()
@@ -205,6 +216,40 @@ async def _create(
     _echo_json(created)
     if save:
         _save_output(runtime.path, input_file, "items.json", created)
+
+
+async def _update(
+    input_file: Path,
+    workspace: Path,
+    provider_name: str | None,
+    execute: bool,
+    save: bool,
+) -> None:
+    runtime = load_workspace(workspace)
+    selected_provider = provider_name or runtime.config.default_provider
+    requirements = parse_markdown_requirements(input_file.read_text(), runtime.config)
+    items = _load_created_items(runtime.path, input_file, selected_provider)
+    matches = [(_find_created_item_by_title(items, requirement.title), requirement) for requirement in requirements]
+
+    if not execute:
+        _echo_json([_task_update_preview(item, requirement) for item, requirement in matches])
+        return
+
+    provider_config = runtime.config.providers.get(selected_provider, {})
+    provider = build_provider(selected_provider, provider_config, runtime.env)
+    statuses = [await provider.update_requirement_tasks(item, requirement) for item, requirement in matches]
+    _echo_json([status.model_dump() for status in statuses])
+    if save:
+        await _refresh_saved_context(runtime, input_file, provider_name)
+
+
+def _task_update_preview(item: CreatedItem, requirement: Requirement) -> dict[str, Any]:
+    return {
+        "provider": item.provider,
+        "id": item.id,
+        "title": requirement.title,
+        "tasks": [task.model_dump() for task in requirement.tasks],
+    }
 
 
 async def _test_provider(workspace: Path, provider_name: str | None) -> None:
@@ -421,6 +466,15 @@ def _find_created_item(items: list[CreatedItem], item_ref: str) -> CreatedItem:
         raise ValueError(f"Multiple items matched '{item_ref}': {titles}")
 
     raise ValueError(f"Item not found: {item_ref}")
+
+
+def _find_created_item_by_title(items: list[CreatedItem], title: str) -> CreatedItem:
+    matches = [item for item in items if item.title.casefold() == title.casefold()]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(f"Multiple items matched title: {title}")
+    raise ValueError(f"Item title not found: {title}")
 
 
 def _find_item_status(statuses: list[ItemStatus], item_ref: str) -> ItemStatus:

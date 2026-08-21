@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from workforge.models import CreatedItem, Requirement, WorkTask
-from workforge.providers.jira import JiraProvider, _find_adf_task, _task_statuses_from_adf
+from workforge.providers.jira import JiraProvider, _find_adf_task, _sync_adf_tasks, _task_statuses_from_adf
 from workforge.providers.registry import build_provider
 
 
@@ -82,6 +82,39 @@ def test_check_includes_jira_error_details_and_redacts_credentials() -> None:
 
 def test_registry_builds_jira_provider() -> None:
     assert isinstance(build_provider("jira", {}, {}), JiraProvider)
+
+
+def test_sync_adf_tasks_preserves_completion_and_unmanaged_content() -> None:
+    description = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "Keep this."}]},
+            {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Tasks"}]},
+            {
+                "type": "taskList",
+                "attrs": {"localId": "workforge-tasks"},
+                "content": [
+                    {
+                        "type": "taskItem",
+                        "attrs": {"localId": "old-1", "state": "DONE"},
+                        "content": [{"type": "text", "text": "Existing"}],
+                    }
+                ],
+            },
+        ],
+    }
+
+    updated = _sync_adf_tasks(
+        description,
+        Requirement(title="Item", tasks=[WorkTask(title="Existing"), WorkTask(title="Added")]),
+    )
+
+    assert updated["content"][0] == description["content"][0]
+    assert [task.model_dump() for task in _task_statuses_from_adf(updated)] == [
+        {"id": "workforge-task-1", "title": "Existing", "done": True},
+        {"id": "workforge-task-2", "title": "Added", "done": False},
+    ]
 
 
 def test_create_requirement_creates_issue_with_adf_and_mappings() -> None:

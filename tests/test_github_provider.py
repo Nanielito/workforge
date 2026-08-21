@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from workforge.models import CreatedItem, Requirement, WorkTask
-from workforge.providers.github import GitHubProvider
+from workforge.providers.github import GitHubProvider, _sync_tasks_in_issue_body
 from workforge.providers.registry import build_provider
 
 
@@ -97,6 +97,17 @@ def test_check_verifies_personal_repository_and_project() -> None:
 
 def test_registry_builds_github_provider() -> None:
     assert isinstance(build_provider("github", {}, {}), GitHubProvider)
+
+
+def test_sync_tasks_preserves_completion_and_unmanaged_body() -> None:
+    body = "Keep this.\n\n## Tasks\n\n- [x] Existing\n- [ ] Removed\n\n## Notes\n\nAlso keep this.\n"
+
+    updated = _sync_tasks_in_issue_body(
+        body,
+        Requirement(title="Item", tasks=[WorkTask(title="Existing"), WorkTask(title="Added")]),
+    )
+
+    assert updated == "Keep this.\n\n## Tasks\n\n- [x] Existing\n- [ ] Added\n\n## Notes\n\nAlso keep this.\n"
 
 
 def test_milestone_must_be_configured() -> None:

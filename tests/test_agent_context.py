@@ -5,8 +5,9 @@ import pytest
 from workforge.cli import (
     _build_agent_context,
     _build_item_context,
-    _find_item_status,
     _find_created_item,
+    _find_created_item_by_title,
+    _find_item_status,
     _load_created_items,
     _item_context_path,
     _slugify,
@@ -86,6 +87,13 @@ def test_find_created_item_rejects_ambiguous_partial_matches() -> None:
 
     with pytest.raises(ValueError, match="Multiple items matched"):
         _find_created_item(items, "Fix")
+
+
+def test_find_created_item_by_title_does_not_use_partial_matches() -> None:
+    items = [CreatedItem(provider="provider-a", id="item-1", title="Fix UI")]
+
+    with pytest.raises(ValueError, match="Item title not found: Fix"):
+        _find_created_item_by_title(items, "Fix")
 
 
 def test_find_item_status_matches_by_id_exact_title_or_unique_partial() -> None:

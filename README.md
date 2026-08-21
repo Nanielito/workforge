@@ -106,6 +106,15 @@ Save created provider items:
 workforge create workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --provider trello --execute --save
 ```
 
+Preview task-list updates for items matched by requirement title, then apply them:
+
+```bash
+workforge update workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example
+workforge update workspaces/trello-example/inbox/sample-requirements.md --workspace workspaces/trello-example --execute
+```
+
+Tasks that keep the same title retain their completion state. Other provider fields are left unchanged.
+
 Discover existing provider items by label and rebuild `items.json`:
 
 ```bash
