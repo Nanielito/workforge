@@ -48,6 +48,10 @@ The main flow is:
 - Never expose tokens, credentials, authorization headers, or `.env` contents in output, exceptions, fixtures, logs, or commits.
 - Do not mutate external planning systems unless the user explicitly authorizes it. Prefer preview, provider checks, and mocked tests while developing.
 - WorkForge dogfoods its GitHub provider: create this repository's tracking issues through the `workspaces/workforge` workspace and WorkForge CLI, previewing first and using `--execute` only when the user explicitly authorizes the external write. Use `gh` or the GitHub UI only when that workflow cannot perform the requested operation.
+- When the user authorizes work on a tracked issue, claim it with `workforge claim-item ... --assignee @me` and move it to `doing` before implementation. This applies to existing issues and issues created for a new requirement.
+- Treat the issue's managed tasks as the implementation checklist. Complete each task through `workforge complete-task` as soon as its behavior is implemented and its relevant check passes; leave unfinished or unverified tasks open and report them at handoff.
+- If implementation changes the checklist scope, update the workspace requirement and synchronize it through WorkForge before continuing task tracking.
+- Do not close a tracked issue or move it to `done` when implementation finishes. Leave it in `doing` while the pull request is open; the pull request or project automation closes it and moves it to `done` on merge.
 - Keep workspace secrets in `.env`, commit only `.env.example`, and preserve workspace isolation by passing the runtime environment explicitly.
 - Treat CLI names, options, JSON fields, output paths, provider contracts, and workspace configuration as public interfaces. Breaking changes require explicit approval and a major release plan.
 - Update README examples or design docs when user-facing commands, configuration, provider behavior, or output contracts change.
@@ -120,9 +124,11 @@ Use a Conventional Commit-style PR title and this body:
 
 - <compatibility, migration, external side-effect, or operational risk>
 - None identified
+
+Closes #<issue-number>
 ```
 
-Mention user-visible CLI/configuration/output changes, deferred work, and breaking or migration implications. Keep the summary factual; never claim tests passed unless they were run successfully.
+Include the `Closes` line only when the work is associated with a tracked issue. Mention user-visible CLI/configuration/output changes, deferred work, and breaking or migration implications. Keep the summary factual; never claim tests passed unless they were run successfully.
 
 ## Definition of done
 
