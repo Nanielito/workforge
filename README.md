@@ -61,6 +61,12 @@ GitHub Actions runs on pull requests and pushes to `main`.
 - Tests run on Python 3.11, 3.12, and 3.13.
 - The package build is validated with `python -m build`.
 
+## Provider design documentation
+
+- [Trello provider design](docs/trello-provider-design.md)
+- [GitHub Projects provider design](docs/github-provider-design.md)
+- [Jira Cloud provider design](docs/jira-provider-design.md)
+
 ## Quick Start
 
 ```bash

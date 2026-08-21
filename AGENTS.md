@@ -47,6 +47,7 @@ The main flow is:
 - Validate configuration before network requests and turn provider failures into useful, secret-safe errors.
 - Never expose tokens, credentials, authorization headers, or `.env` contents in output, exceptions, fixtures, logs, or commits.
 - Do not mutate external planning systems unless the user explicitly authorizes it. Prefer preview, provider checks, and mocked tests while developing.
+- WorkForge dogfoods its GitHub provider: create this repository's tracking issues through the `workspaces/workforge` workspace and WorkForge CLI, previewing first and using `--execute` only when the user explicitly authorizes the external write. Use `gh` or the GitHub UI only when that workflow cannot perform the requested operation.
 - Keep workspace secrets in `.env`, commit only `.env.example`, and preserve workspace isolation by passing the runtime environment explicitly.
 - Treat CLI names, options, JSON fields, output paths, provider contracts, and workspace configuration as public interfaces. Breaking changes require explicit approval and a major release plan.
 - Update README examples or design docs when user-facing commands, configuration, provider behavior, or output contracts change.
