@@ -76,6 +76,8 @@ def discover(
     workspace: Path = typer.Option(..., "--workspace", "-w"),
     provider: str | None = typer.Option(None, "--provider", "-p"),
     label: str | None = typer.Option(None, "--label", "-l", help="Provider label name or ID used to filter items."),
+    assignee: str | None = typer.Option(None, "--assignee", "-a", help="Provider username or @me used to filter items."),
+    status: str | None = typer.Option(None, "--status", "-s", help="Provider status name or configured alias used to filter items."),
     output_name: str = typer.Option(
         "discovered",
         "--output-name",
@@ -83,7 +85,7 @@ def discover(
     ),
     save: bool = typer.Option(False, "--save", help="Save discovered items as items.json."),
 ) -> None:
-    asyncio.run(_discover(input_file, workspace, provider, label, output_name, save))
+    asyncio.run(_discover(input_file, workspace, provider, label, assignee, status, output_name, save))
 
 
 @app.command()
@@ -208,6 +210,8 @@ async def _discover(
     workspace: Path,
     provider_name: str | None,
     label: str | None,
+    assignee: str | None,
+    status: str | None,
     output_name: str,
     save: bool,
 ) -> None:
@@ -215,7 +219,7 @@ async def _discover(
     selected_provider = provider_name or runtime.config.default_provider
     provider_config = runtime.config.providers.get(selected_provider, {})
     provider = build_provider(selected_provider, provider_config, runtime.env)
-    discovered = [item.model_dump() for item in await provider.discover_items(label)]
+    discovered = [item.model_dump() for item in await provider.discover_items(label, assignee, status)]
     _echo_json(discovered)
 
     if save:

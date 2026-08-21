@@ -121,7 +121,14 @@ class TrelloProvider(PlanningProvider):
 
         return await self.get_item_status(item)
 
-    async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
+    async def discover_items(
+        self,
+        label_ref: str | None = None,
+        assignee_ref: str | None = None,
+        status_ref: str | None = None,
+    ) -> list[CreatedItem]:
+        if assignee_ref or status_ref:
+            raise NotImplementedError("Trello discovery does not support assignee or status filters yet.")
         check = await self.check()
         if not check.ok:
             raise RuntimeError(check.message)

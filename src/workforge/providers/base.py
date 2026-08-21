@@ -31,5 +31,10 @@ class PlanningProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
+    async def discover_items(
+        self,
+        label_ref: str | None = None,
+        assignee_ref: str | None = None,
+        status_ref: str | None = None,
+    ) -> list[CreatedItem]:
         raise NotImplementedError

@@ -64,10 +64,19 @@ mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
 
 _PROJECT_ITEMS_QUERY = """
 query($owner: String!, $project: Int!, $cursor: String) {
+  viewer { login }
   user(login: $owner) {
     projectV2(number: $project) {
       items(first: 100, after: $cursor) {
         nodes {
+          fieldValues(first: 20) {
+            nodes {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field { ... on ProjectV2FieldCommon { name } }
+              }
+            }
+          }
           content {
             ... on Issue {
               number
@@ -76,6 +85,7 @@ query($owner: String!, $project: Int!, $cursor: String) {
               state
               repository { nameWithOwner }
               labels(first: 100) { nodes { id name } }
+              assignees(first: 100) { nodes { id login } }
             }
           }
         }
@@ -300,8 +310,15 @@ class GitHubProvider(PlanningProvider):
 
         return await self.get_item_status(item)
 
-    async def discover_items(self, label_ref: str | None = None) -> list[CreatedItem]:
+    async def discover_items(
+        self,
+        label_ref: str | None = None,
+        assignee_ref: str | None = None,
+        status_ref: str | None = None,
+    ) -> list[CreatedItem]:
         self._require_configuration()
+        if status_ref and (not isinstance(self.status, dict) or not self.status.get("field")):
+            raise RuntimeError("Missing configuration: providers.github.status.field")
 
         discovered: list[CreatedItem] = []
         cursor: str | None = None
@@ -313,13 +330,15 @@ class GitHubProvider(PlanningProvider):
                     {"owner": self.owner, "project": self.project_number, "cursor": cursor},
                 )
                 project = (payload.get("data", {}).get("user") or {}).get("projectV2") or {}
+                viewer_login = payload.get("data", {}).get("viewer", {}).get("login", "")
                 items = project.get("items")
                 if not items:
                     raise ValueError(f"GitHub Project v2 not found: {self.project_number}")
 
                 for node in items.get("nodes", []):
-                    issue = (node or {}).get("content") or {}
-                    if self._is_discoverable_issue(issue, label_ref):
+                    node = node or {}
+                    issue = node.get("content") or {}
+                    if self._is_discoverable_issue(node, label_ref, assignee_ref, status_ref, viewer_login):
                         discovered.append(
                             CreatedItem(
                                 provider=self.name,
@@ -336,21 +355,47 @@ class GitHubProvider(PlanningProvider):
 
         return discovered
 
-    def _is_discoverable_issue(self, issue: dict[str, Any], label_ref: str | None) -> bool:
+    def _is_discoverable_issue(
+        self,
+        item: dict[str, Any],
+        label_ref: str | None,
+        assignee_ref: str | None,
+        status_ref: str | None,
+        viewer_login: str,
+    ) -> bool:
+        issue = item.get("content") or {}
         if issue.get("state") != "OPEN":
             return False
         repository = issue.get("repository", {}).get("nameWithOwner", "")
         if repository.casefold() != f"{self.owner}/{self.repository}".casefold():
             return False
-        if not label_ref:
-            return True
-
-        configured_name = self.labels.get(label_ref) if isinstance(self.labels, dict) else None
-        expected = configured_name or label_ref
-        return any(
-            label.get("id") == expected or label.get("name", "").casefold() == expected.casefold()
-            for label in issue.get("labels", {}).get("nodes", [])
-        )
+        if label_ref:
+            configured_name = self.labels.get(label_ref) if isinstance(self.labels, dict) else None
+            expected = configured_name or label_ref
+            if not any(
+                label.get("id") == expected or label.get("name", "").casefold() == expected.casefold()
+                for label in issue.get("labels", {}).get("nodes", [])
+            ):
+                return False
+        if assignee_ref:
+            expected = viewer_login if assignee_ref.casefold() == "@me" else assignee_ref.removeprefix("@")
+            if not any(
+                assignee.get("id") == expected or assignee.get("login", "").casefold() == expected.casefold()
+                for assignee in issue.get("assignees", {}).get("nodes", [])
+            ):
+                return False
+        if status_ref:
+            field_name = str(self.status["field"])
+            values = self.status.get("values", {})
+            expected = values.get(status_ref, status_ref) if isinstance(values, dict) else status_ref
+            if not any(
+                value.get("name", "").casefold() == expected.casefold()
+                and value.get("field", {}).get("name", "").casefold() == field_name.casefold()
+                for value in item.get("fieldValues", {}).get("nodes", [])
+                if value
+            ):
+                return False
+        return True
 
     async def _get_issue(self, client: httpx.AsyncClient, issue_number: str) -> dict[str, Any]:
         response = await client.get(
