@@ -21,6 +21,7 @@ class JiraProvider(PlanningProvider):
         self.issue_type = config.get("issue_type", "")
         self.labels = config.get("labels", {})
         self.versions = config.get("versions", {})
+        self.status = config.get("status", {})
         self.email = env.get("JIRA_EMAIL", "")
         self.api_token = env.get("JIRA_API_TOKEN", "")
         self.transport = transport
@@ -184,10 +185,72 @@ class JiraProvider(PlanningProvider):
         )
 
     async def comment_item(self, item: CreatedItem, text: str) -> ItemStatus:
-        raise NotImplementedError("Jira comments are not implemented yet.")
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+        if not text.strip():
+            raise ValueError("Comment text cannot be empty.")
+
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.site_url,
+                auth=(self.email, self.api_token),
+                timeout=20,
+                transport=self.transport,
+            ) as client:
+                response = await client.post(
+                    f"/rest/api/3/issue/{item.id}/comment",
+                    json={"body": _paragraph_adf(text)},
+                )
+                response.raise_for_status()
+        except httpx.HTTPError as error:
+            raise RuntimeError(f"Jira request failed: {self._safe_message(error)}") from error
+
+        return await self.get_item_status(item)
 
     async def move_item(self, item: CreatedItem, status_ref: str) -> ItemStatus:
-        raise NotImplementedError("Jira transitions are not implemented yet.")
+        if error := self._configuration_error():
+            raise RuntimeError(error)
+
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.site_url,
+                auth=(self.email, self.api_token),
+                timeout=20,
+                transport=self.transport,
+            ) as client:
+                response = await client.get(f"/rest/api/3/issue/{item.id}/transitions")
+                response.raise_for_status()
+                transitions = response.json().get("transitions", [])
+                transition = self._resolve_transition(transitions, status_ref)
+                response = await client.post(
+                    f"/rest/api/3/issue/{item.id}/transitions",
+                    json={"transition": {"id": transition["id"]}},
+                )
+                response.raise_for_status()
+        except httpx.HTTPError as error:
+            raise RuntimeError(f"Jira request failed: {self._safe_message(error)}") from error
+
+        return await self.get_item_status(item)
+
+    def _resolve_transition(self, transitions: list[dict[str, Any]], status_ref: str) -> dict[str, Any]:
+        values = self.status.get("values", {}) if isinstance(self.status, dict) else {}
+        target = values.get(status_ref, status_ref) if isinstance(values, dict) else status_ref
+        matches = [
+            transition
+            for transition in transitions
+            if transition.get("id") == target
+            or transition.get("name", "").casefold() == str(target).casefold()
+            or transition.get("to", {}).get("name", "").casefold() == str(target).casefold()
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise ValueError(f"Multiple Jira transitions matched: {status_ref}")
+        available = ", ".join(
+            f"{transition.get('id')} ({transition.get('name')} → {transition.get('to', {}).get('name')})"
+            for transition in transitions
+        )
+        raise ValueError(f"Jira transition not available for '{status_ref}'. Available: {available or 'none'}")
 
     async def discover_items(
         self,
@@ -228,6 +291,10 @@ def _adf_document(requirement: Requirement) -> dict[str, Any]:
 
 def _empty_adf_document() -> dict[str, Any]:
     return {"type": "doc", "version": 1, "content": []}
+
+
+def _paragraph_adf(text: str) -> dict[str, Any]:
+    return {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": text}]}]}
 
 
 def _managed_adf_tasks(description: dict[str, Any] | None) -> list[dict[str, Any]]:
