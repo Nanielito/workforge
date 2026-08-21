@@ -9,7 +9,12 @@ from workforge.providers.base import PlanningProvider
 class TrelloProvider(PlanningProvider):
     name = "trello"
 
-    def __init__(self, config: dict[str, Any], env: dict[str, str]):
+    def __init__(
+        self,
+        config: dict[str, Any],
+        env: dict[str, str],
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         self.config = config
         self.env = env
         self.api_key = env.get("TRELLO_API_KEY", "")
@@ -18,6 +23,7 @@ class TrelloProvider(PlanningProvider):
         self.labels = config.get("labels", {})
         self.lists = config.get("lists", {})
         self.base_url = "https://api.trello.com/1"
+        self.transport = transport
 
     async def check(self) -> ProviderCheck:
         missing = [
@@ -44,7 +50,7 @@ class TrelloProvider(PlanningProvider):
         if not check.ok:
             raise RuntimeError(check.message)
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20, transport=self.transport) as client:
             card = await self._create_card(client, requirement)
             if requirement.tasks:
                 checklist = await self._create_checklist(client, card["id"])
@@ -63,7 +69,7 @@ class TrelloProvider(PlanningProvider):
         if not check.ok:
             raise RuntimeError(check.message)
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20, transport=self.transport) as client:
             card = await self._get_card(client, item.id)
             checklists = await self._get_card_checklists(client, item.id)
 
@@ -83,7 +89,7 @@ class TrelloProvider(PlanningProvider):
         if not check.ok:
             raise RuntimeError(check.message)
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20, transport=self.transport) as client:
             card = await self._get_card(client, item.id)
             checklists = await self._get_card_checklists(client, item.id)
             task = _find_task(checklists, task_ref)
@@ -104,7 +110,7 @@ class TrelloProvider(PlanningProvider):
         if not check.ok:
             raise RuntimeError(check.message)
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20, transport=self.transport) as client:
             await self._comment_card(client, item.id, text)
 
         return await self.get_item_status(item)
@@ -116,7 +122,7 @@ class TrelloProvider(PlanningProvider):
 
         list_id = self._configured_list_id(status_ref) or status_ref
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20, transport=self.transport) as client:
             await self._move_card(client, item.id, list_id)
 
         return await self.get_item_status(item)
@@ -127,21 +133,24 @@ class TrelloProvider(PlanningProvider):
         assignee_ref: str | None = None,
         status_ref: str | None = None,
     ) -> list[CreatedItem]:
-        if assignee_ref or status_ref:
-            raise NotImplementedError("Trello discovery does not support assignee or status filters yet.")
         check = await self.check()
         if not check.ok:
             raise RuntimeError(check.message)
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=20) as client:
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=20, transport=self.transport) as client:
             board_id = await self._get_board_id_for_list(client, self.list_id)
             label_id = await self._resolve_label_id(client, board_id, label_ref) if label_ref else None
+            member_id = await self._resolve_member_id(client, board_id, assignee_ref) if assignee_ref else None
+            list_id = self._configured_list_id(status_ref) or status_ref if status_ref else None
             cards = await self._get_board_cards(client, board_id)
 
         discovered_cards = [
             card
             for card in cards
-            if not card.get("closed") and _card_matches_label(card, label_id)
+            if not card.get("closed")
+            and _card_matches_label(card, label_id)
+            and _card_matches_member(card, member_id)
+            and (list_id is None or card.get("idList") == list_id)
         ]
 
         return [
@@ -248,10 +257,38 @@ class TrelloProvider(PlanningProvider):
     async def _get_board_cards(self, client: httpx.AsyncClient, board_id: str) -> list[dict[str, Any]]:
         response = await client.get(
             f"/boards/{board_id}/cards",
-            params={**self._auth_params(), "fields": "id,name,closed,shortUrl,url,idLabels,labels"},
+            params={**self._auth_params(), "fields": "id,name,closed,shortUrl,url,idLabels,labels,idMembers,idList"},
         )
         response.raise_for_status()
         return response.json()
+
+    async def _resolve_member_id(self, client: httpx.AsyncClient, board_id: str, member_ref: str) -> str:
+        if member_ref.casefold() == "@me":
+            response = await client.get(
+                "/members/me",
+                params={**self._auth_params(), "fields": "id"},
+            )
+            response.raise_for_status()
+            return response.json()["id"]
+
+        response = await client.get(
+            f"/boards/{board_id}/members",
+            params={**self._auth_params(), "fields": "id,username,fullName"},
+        )
+        response.raise_for_status()
+        expected = member_ref.removeprefix("@").casefold()
+        matches = [
+            member
+            for member in response.json()
+            if member.get("id") == member_ref
+            or member.get("username", "").casefold() == expected
+            or member.get("fullName", "").casefold() == expected
+        ]
+        if len(matches) == 1:
+            return matches[0]["id"]
+        if len(matches) > 1:
+            raise ValueError(f"Multiple Trello members matched: {member_ref}")
+        raise ValueError(f"Trello member not found: {member_ref}")
 
     async def _get_board_labels(self, client: httpx.AsyncClient, board_id: str) -> list[dict[str, Any]]:
         response = await client.get(
@@ -334,6 +371,10 @@ def _card_matches_label(card: dict[str, Any], label_id: str | None) -> bool:
         return True
 
     return any(label.get("id") == label_id for label in card.get("labels", []))
+
+
+def _card_matches_member(card: dict[str, Any], member_id: str | None) -> bool:
+    return member_id is None or member_id in card.get("idMembers", [])
 
 
 def _find_task(checklists: list[dict[str, Any]], task_ref: str) -> dict[str, Any]:

@@ -1,8 +1,13 @@
+import asyncio
+
+import httpx
+
 from workforge.models import Requirement
 from workforge.providers.trello import (
     TrelloProvider,
     _build_description,
     _card_matches_label,
+    _card_matches_member,
     _find_task,
     _task_statuses_from_checklists,
 )
@@ -80,6 +85,100 @@ def test_card_matches_label_by_id_labels_or_embedded_labels() -> None:
     assert _card_matches_label({"labels": [{"id": "label-product"}]}, "label-product") is True
     assert _card_matches_label({"idLabels": ["label-other"]}, "label-product") is False
     assert _card_matches_label({"idLabels": []}, None) is True
+
+
+def test_card_matches_member() -> None:
+    assert _card_matches_member({"idMembers": ["member-1"]}, "member-1") is True
+    assert _card_matches_member({"idMembers": ["member-2"]}, "member-1") is False
+    assert _card_matches_member({}, None) is True
+
+
+def test_discover_items_filters_member_list_and_label() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/1/lists/list-todo":
+            return httpx.Response(200, json={"idBoard": "board-1"})
+        if request.url.path == "/1/boards/board-1/members":
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": "member-1", "username": "nanielito", "fullName": "Daniel Ramirez"},
+                    {"id": "member-2", "username": "other", "fullName": "Other User"},
+                ],
+            )
+        assert request.url.path == "/1/boards/board-1/cards"
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "card-1",
+                    "name": "Matching card",
+                    "closed": False,
+                    "idLabels": ["label-feature"],
+                    "idMembers": ["member-1"],
+                    "idList": "list-doing",
+                },
+                {
+                    "id": "card-2",
+                    "name": "Other member",
+                    "closed": False,
+                    "idLabels": ["label-feature"],
+                    "idMembers": ["member-2"],
+                    "idList": "list-doing",
+                },
+                {
+                    "id": "card-3",
+                    "name": "Other list",
+                    "closed": False,
+                    "idLabels": ["label-feature"],
+                    "idMembers": ["member-1"],
+                    "idList": "list-todo",
+                },
+            ],
+        )
+
+    provider = TrelloProvider(
+        config={
+            "list_id": "list-todo",
+            "lists": {"doing": "list-doing"},
+            "labels": {"feature": "label-feature"},
+        },
+        env={"TRELLO_API_KEY": "key", "TRELLO_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    items = asyncio.run(provider.discover_items("feature", "@nanielito", "doing"))
+
+    assert [item.id for item in items] == ["card-1"]
+
+
+def test_discover_items_resolves_me() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/1/lists/list-todo":
+            return httpx.Response(200, json={"idBoard": "board-1"})
+        if request.url.path == "/1/members/me":
+            return httpx.Response(200, json={"id": "member-1"})
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "card-1",
+                    "name": "My card",
+                    "closed": False,
+                    "idMembers": ["member-1"],
+                    "idList": "list-todo",
+                }
+            ],
+        )
+
+    provider = TrelloProvider(
+        config={"list_id": "list-todo"},
+        env={"TRELLO_API_KEY": "key", "TRELLO_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    items = asyncio.run(provider.discover_items(assignee_ref="@me"))
+
+    assert [item.id for item in items] == ["card-1"]
 
 
 def test_task_statuses_from_checklists_preserves_check_item_ids() -> None:
