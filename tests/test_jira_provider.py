@@ -4,8 +4,8 @@ import json
 import httpx
 import pytest
 
-from workforge.models import Requirement, WorkTask
-from workforge.providers.jira import JiraProvider
+from workforge.models import CreatedItem, Requirement, WorkTask
+from workforge.providers.jira import JiraProvider, _find_adf_task, _task_statuses_from_adf
 from workforge.providers.registry import build_provider
 
 
@@ -128,3 +128,124 @@ def test_create_requirement_rejects_unconfigured_version() -> None:
 
     with pytest.raises(ValueError, match="Jira version is not configured: missing"):
         asyncio.run(provider.create_requirement(Requirement(title="Test", milestone="missing")))
+
+
+def _issue_description() -> dict:
+    return {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "Keep this."}]},
+            {
+                "type": "taskList",
+                "attrs": {"localId": "other-tasks"},
+                "content": [
+                    {
+                        "type": "taskItem",
+                        "attrs": {"localId": "other-1", "state": "TODO"},
+                        "content": [{"type": "text", "text": "Ignore this"}],
+                    }
+                ],
+            },
+            {
+                "type": "taskList",
+                "attrs": {"localId": "workforge-tasks"},
+                "content": [
+                    {
+                        "type": "taskItem",
+                        "attrs": {"localId": "workforge-task-1", "state": "TODO"},
+                        "content": [{"type": "text", "text": "Build parser"}],
+                    },
+                    {
+                        "type": "taskItem",
+                        "attrs": {"localId": "workforge-task-2", "state": "DONE"},
+                        "content": [{"type": "text", "text": "Add tests"}],
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def test_task_statuses_only_read_managed_adf_tasks() -> None:
+    tasks = _task_statuses_from_adf(_issue_description())
+
+    assert [(task.id, task.title, task.done) for task in tasks] == [
+        ("workforge-task-1", "Build parser", False),
+        ("workforge-task-2", "Add tests", True),
+    ]
+
+
+def test_find_adf_task_supports_id_exact_title_and_unique_substring() -> None:
+    description = _issue_description()
+
+    assert _find_adf_task(description, "workforge-task-1")["attrs"]["localId"] == "workforge-task-1"
+    assert _find_adf_task(description, "Add tests")["attrs"]["localId"] == "workforge-task-2"
+    assert _find_adf_task(description, "parser")["attrs"]["localId"] == "workforge-task-1"
+    with pytest.raises(ValueError, match="Multiple tasks matched"):
+        _find_adf_task(description, "a")
+
+
+def test_get_item_status_reads_jira_status_and_tasks() -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/rest/api/3/issue/WF-12"
+        assert request.url.params["fields"] == "summary,status,description"
+        return httpx.Response(
+            200,
+            json={
+                "key": "WF-12",
+                "fields": {
+                    "summary": "Jira item",
+                    "status": {"statusCategory": {"key": "done"}},
+                    "description": _issue_description(),
+                },
+            },
+        )
+
+    provider = JiraProvider(
+        {"site_url": "https://example.atlassian.net", "project_key": "WF", "issue_type": "Task"},
+        {"JIRA_EMAIL": "user@example.com", "JIRA_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(provider.get_item_status(CreatedItem(provider="jira", id="WF-12", title="Fallback")))
+
+    assert status.title == "Jira item"
+    assert status.closed is True
+    assert status.completed_tasks == 1
+
+
+def test_complete_task_updates_only_selected_managed_task() -> None:
+    original = _issue_description()
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "key": "WF-12",
+                    "fields": {
+                        "summary": "Jira item",
+                        "status": {"statusCategory": {"key": "indeterminate"}},
+                        "description": original,
+                    },
+                },
+            )
+        updated = json.loads(request.content)["fields"]["description"]
+        assert updated["content"][0]["content"][0]["text"] == "Keep this."
+        assert updated["content"][1]["content"][0]["attrs"]["state"] == "TODO"
+        assert updated["content"][2]["content"][0]["attrs"]["state"] == "DONE"
+        assert updated["content"][2]["content"][1]["attrs"]["state"] == "DONE"
+        return httpx.Response(204)
+
+    provider = JiraProvider(
+        {"site_url": "https://example.atlassian.net", "project_key": "WF", "issue_type": "Task"},
+        {"JIRA_EMAIL": "user@example.com", "JIRA_API_TOKEN": "token"},
+        transport=httpx.MockTransport(respond),
+    )
+
+    status = asyncio.run(
+        provider.complete_task(CreatedItem(provider="jira", id="WF-12", title="Fallback"), "parser")
+    )
+
+    assert status.completed_tasks == 2
