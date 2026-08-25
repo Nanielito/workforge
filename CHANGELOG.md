@@ -1,3 +1,12 @@
+## [2.5.0] - 2026-08-25
+
+### 🚀 Features
+
+- *(workspace)* Add contributor instructions
+
+### 📚 Documentation
+
+- Clarify WorkForge installation modes
 ## [2.4.1] - 2026-08-21
 
 ### 💼 Other
@@ -13,6 +22,7 @@
 
 - *(github pages)* Create theme configuration file
 - Updates documentation
+- Release 2.4.1
 ## [2.4.0] - 2026-08-21
 
 ### 🚀 Features
