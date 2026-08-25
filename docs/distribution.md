@@ -13,6 +13,9 @@ separate GitHub environment so it never receives the repository write token.
 
 ## Choose how to run WorkForge
 
+`uvx` ships with `uv`; users who do not have it can follow the
+[official uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+
 ### On demand in a project
 
 Use `uvx` when WorkForge supports planning for a project but should not become a
@@ -78,11 +81,14 @@ uv tool install workforge==X.Y.Z
 Create a workspace inside the project that WorkForge will manage:
 
 ```bash
-workforge init .workforge \
+uvx workforge init .workforge \
   --name my-project \
   --provider github \
   --namespace organization/repository
 ```
+
+The generated `.workforge/README.md` explains how to create provider items from
+a Markdown requirement or discover and continue existing items using `uvx`.
 
 Keep credentials and generated output out of version control:
 
@@ -95,19 +101,19 @@ Copy `.workforge/.env.example` to `.workforge/.env`, add the selected provider's
 credentials, and validate them before performing writes:
 
 ```bash
-workforge providers test --workspace .workforge --provider github
+uvx workforge providers test --workspace .workforge --provider github
 ```
 
 Place Markdown requirements in `.workforge/inbox/`. Preview them first:
 
 ```bash
-workforge preview .workforge/inbox/requirements.md --workspace .workforge
+uvx workforge preview .workforge/inbox/requirements.md --workspace .workforge
 ```
 
 Create external planning items only after reviewing the preview:
 
 ```bash
-workforge create .workforge/inbox/requirements.md \
+uvx workforge create .workforge/inbox/requirements.md \
   --workspace .workforge \
   --provider github \
   --execute \

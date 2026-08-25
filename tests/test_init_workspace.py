@@ -6,6 +6,7 @@ from workforge.cli import (
     _env_example_template,
     _init_workspace,
     _project_workspace_gitignore_block,
+    _workspace_readme_template,
     _workspace_config_template,
 )
 
@@ -49,11 +50,17 @@ def test_init_workspace_creates_project_local_scaffold(tmp_path: Path) -> None:
     assert created == [
         workspace / "workforge.yaml",
         workspace / ".env.example",
+        workspace / "README.md",
         workspace / "output" / ".gitkeep",
     ]
     assert (workspace / "inbox").is_dir()
     assert (workspace / "output").is_dir()
     assert (workspace / ".env.example").read_text() == ""
+    assert (workspace / "README.md").read_text() == _workspace_readme_template()
+    assert "uvx workforge" in (workspace / "README.md").read_text()
+    assert "Start from a requirement" in (workspace / "README.md").read_text()
+    assert "Continue existing items" in (workspace / "README.md").read_text()
+    assert "https://github.com/Nanielito/workforge#quick-start" in (workspace / "README.md").read_text()
     assert "default_provider: test-provider" in (workspace / "workforge.yaml").read_text()
 
 

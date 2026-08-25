@@ -67,6 +67,10 @@ GitHub Actions runs on pull requests and pushes to `main`.
 
 ## Quick Start
 
+`uvx` is included with `uv`. If it is not available yet, install `uv` using the
+[official installation guide](https://docs.astral.sh/uv/getting-started/installation/),
+which covers macOS, Linux, Windows, and common package managers.
+
 Run WorkForge on demand without installing a permanent command:
 
 ```bash
@@ -228,9 +232,13 @@ workforge providers test --workspace workspaces/trello-example --provider trello
 <workspace>/
   workforge.yaml
   .env.example
+  README.md
   inbox/
   output/
 ```
+
+`workforge init` creates the workspace README with a concise contributor
+workflow for configuring access, previewing requirements, and tracking work.
 
 Workspace `.env` files are intentionally local-only. Commit `.env.example`, not
 `.env`.
