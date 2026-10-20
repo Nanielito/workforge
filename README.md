@@ -59,7 +59,13 @@ GitHub Actions runs on pull requests and pushes to `main`.
 - Tests run on Python 3.11, 3.12, and 3.13.
 - The package build is validated with `python -m build`.
 
-## Provider design documentation
+## Technical documentation
+
+- [Documentation map](https://github.com/Nanielito/workforge/blob/main/docs/README.md)
+- [Technical baseline in English](https://github.com/Nanielito/workforge/blob/main/docs/en/README.md)
+- [Línea base técnica en español](https://github.com/Nanielito/workforge/blob/main/docs/es/README.md)
+
+Provider references:
 
 - [Trello provider design](https://github.com/Nanielito/workforge/blob/main/docs/trello-provider-design.md)
 - [GitHub Projects provider design](https://github.com/Nanielito/workforge/blob/main/docs/github-provider-design.md)
